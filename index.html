@@ -202,33 +202,35 @@ canvas {
 .tooltip {
   position: fixed;
   background: #1a1a2e;
-  border: 1px solid #00CCFF;
-  border-radius: 4px;
-  padding: 8px 12px;
-  font-size: 11px;
+  border: 2px solid #00CCFF;
+  border-radius: 6px;
+  padding: 14px 18px;
+  font-size: 14px;
   color: #e0e0e0;
   pointer-events: none;
   z-index: 100;
   display: none;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  max-width: 250px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+  max-width: 400px;
 }
 
 .tooltip .tt-name {
   color: #00CCFF;
-  font-size: 13px;
-  margin-bottom: 4px;
+  font-size: 22px;
+  margin-bottom: 6px;
+  font-weight: bold;
 }
 
 .tooltip .tt-status {
   color: #5ac88c;
-  font-size: 10px;
+  font-size: 17px;
 }
 
 .tooltip .tt-detail {
-  color: #888;
-  font-size: 9px;
-  margin-top: 4px;
+  color: #aaa;
+  font-size: 15px;
+  margin-top: 6px;
+  line-height: 1.4;
 }
 
 @media (max-width: 900px) {
@@ -281,20 +283,61 @@ canvas {
       <div id="pipelineHealth" style="font-size: 16px; color: #888;">Loading...</div>
     </div>
 
-    <div class="panel" style="display: flex; flex-direction: column;">
-      <h3>Top Bot</h3>
-      <div id="chatMessages" style="max-height: 250px; overflow-y: auto; margin-bottom: 12px; font-size: 16px; color: #ccc; line-height: 1.5;">
-        <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
-      </div>
-      <div style="display: flex; gap: 8px;">
-        <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
-          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 10px 12px; font-family: 'PixelSans', monospace; font-size: 16px; border-radius: 4px; outline: none;"
-          onkeydown="if(event.key==='Enter')sendChat()" />
-        <button onclick="sendChat()"
-          style="background: #00CCFF; color: #0a0a14; border: none; padding: 10px 20px; font-family: 'PixelSans', monospace; font-size: 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
-          Send
-        </button>
-      </div>
+  </div>
+</div>
+
+<!-- Floating Top Bot chat window -->
+<div id="chatFloat" style="
+  position: fixed; bottom: 20px; right: 20px; width: 420px; z-index: 50;
+  font-family: 'PixelSans', monospace;
+">
+  <!-- Collapsed tab -->
+  <div id="chatTab" onclick="toggleChat()" style="
+    background: #12121e; border: 1px solid #00CCFF; border-radius: 8px;
+    padding: 10px 18px; cursor: pointer; display: flex; align-items: center; gap: 10px;
+    user-select: none;
+  ">
+    <span style="color: #ff6b6b; font-size: 16px; font-weight: bold;">TB</span>
+    <span style="color: #e0e0e0; font-size: 16px;">Top Bot</span>
+    <span id="chatDot" style="width: 8px; height: 8px; border-radius: 50%; background: #5ac88c; margin-left: auto;"></span>
+  </div>
+
+  <!-- Expanded window -->
+  <div id="chatWindow" style="
+    display: none; background: #12121e; border: 1px solid #00CCFF; border-radius: 8px;
+    overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+  ">
+    <!-- Title bar (draggable) -->
+    <div id="chatTitleBar" style="
+      background: #1a1a2e; padding: 10px 14px; cursor: move; display: flex;
+      align-items: center; justify-content: space-between; border-bottom: 1px solid #2a2a4a;
+      user-select: none;
+    ">
+      <span style="color: #00CCFF; font-size: 16px; font-weight: bold; letter-spacing: 1px;">TOP BOT</span>
+      <span onclick="toggleChat()" style="color: #666; font-size: 20px; cursor: pointer; line-height: 1;">&times;</span>
+    </div>
+
+    <!-- Messages -->
+    <div id="chatMessages" style="
+      height: 220px; overflow-y: auto; padding: 12px 14px;
+      font-size: 15px; color: #ccc; line-height: 1.6;
+    ">
+      <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
+    </div>
+
+    <!-- Input -->
+    <div style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid #2a2a4a; background: #1a1a2e;">
+      <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
+        style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0;
+        padding: 10px 12px; font-family: 'PixelSans', monospace; font-size: 15px;
+        border-radius: 4px; outline: none;"
+        onkeydown="if(event.key==='Enter')sendChat()" />
+      <button onclick="sendChat()"
+        style="background: #00CCFF; color: #0a0a14; border: none; padding: 10px 18px;
+        font-family: 'PixelSans', monospace; font-size: 15px; border-radius: 4px;
+        cursor: pointer; font-weight: bold;">
+        Send
+      </button>
     </div>
   </div>
 </div>
@@ -320,8 +363,8 @@ const BACKEND = 'https://lpu-agent-backend.up.railway.app';
 // ── Auth ──────────────────────────────────────────────────────────────
 let AUTH = null;
 function cleanToken(raw) {
-  // Strip "Bearer " prefix if user pasted the full header
-  return raw.replace(/^Bearer\s+/i, '').trim();
+  // Strip "Bearer " prefix, all whitespace, invisible chars, quotes
+  return raw.replace(/^Bearer\s+/i, '').replace(/[\s\u200B\u00A0\uFEFF"']/g, '').trim();
 }
 function getAuth() {
   let token = localStorage.getItem('lpu_war_room_token');
@@ -350,13 +393,43 @@ function showAuthGate() {
   document.body.appendChild(overlay);
   const input = document.getElementById('authTokenInput');
   const btn = document.getElementById('authSubmitBtn');
-  function submit() {
-    const val = cleanToken(input.value.trim());
+  async function submit() {
+    const val = cleanToken(input.value);
     if (!val) return;
-    localStorage.setItem('lpu_war_room_token', val);
-    AUTH = `Bearer ${val}`;
-    overlay.remove();
-    pollData();
+    btn.textContent = 'Testing...';
+    btn.disabled = true;
+    // Test the token against /health before accepting
+    try {
+      const res = await fetch(`${BACKEND}/health`, {
+        headers: { 'Authorization': `Bearer ${val}` },
+      });
+      if (res.ok) {
+        localStorage.setItem('lpu_war_room_token', val);
+        AUTH = `Bearer ${val}`;
+        overlay.remove();
+        pollData();
+        return;
+      }
+    } catch (e) { /* network error */ }
+    // Also test without auth (health might not require it)
+    try {
+      const res2 = await fetch(`${BACKEND}/manager/tools/get_recruitment_kpis`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${val}` },
+        body: JSON.stringify({ windows_hours: [24] }),
+      });
+      if (res2.ok) {
+        localStorage.setItem('lpu_war_room_token', val);
+        AUTH = `Bearer ${val}`;
+        overlay.remove();
+        pollData();
+        return;
+      }
+    } catch (e) { /* network error */ }
+    btn.textContent = 'Invalid token. Try again.';
+    btn.style.background = '#ff4444';
+    btn.disabled = false;
+    setTimeout(() => { btn.textContent = 'Connect'; btn.style.background = '#00CCFF'; }, 2000);
   }
   btn.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
@@ -544,41 +617,26 @@ function floorTile(img, col, row) {
 
 // ── Floor rendering ───────────────────────────────────────────────────
 function drawFloor() {
-  const tileMap = {
-    0:   SPR.wall_0,
-    1:   SPR.floor_1,
-    7:   SPR.floor_7,
-    9:   SPR.floor_9,
-    255: null,
-  };
-
-  const fallbackColors = {
-    0:   '#1a1520',
-    1:   '#5a4535',
-    7:   '#6b5030',
-    9:   '#3a2a1a',
-    255: '#0a0a14',
+  // Solid warm oak palette. No PNGs. High contrast with characters.
+  const colors = {
+    0:   '#1a1520',   // walls: near-black
+    1:   '#5a4230',   // right room: warm oak
+    7:   '#5a4230',   // left room: warm oak (same)
+    9:   '#3a2a1a',   // break room: dark walnut
+    255: '#0a0a14',   // void
   };
 
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
       const tileId = OFFICE_TILES[r][c];
+      ctx.fillStyle = colors[tileId] || '#0a0a14';
+      ctx.fillRect(c * T, r * T, T, T);
 
-      // Void: just dark
-      if (tileId === 255) {
-        ctx.fillStyle = '#0a0a14';
-        ctx.fillRect(c * T, r * T, T, T);
-        continue;
-      }
-
-      const img = tileMap[tileId];
-      if (img) {
-        // Tile the 16x16 PNG across the 32x32 zoomed cell
-        ctx.drawImage(img, 0, 0, 16, 16, c * T, r * T, T, T);
-      } else {
-        // Fallback solid color if sprite not loaded
-        ctx.fillStyle = fallbackColors[tileId] || '#0a0a14';
-        ctx.fillRect(c * T, r * T, T, T);
+      // Subtle grid lines between floor tiles (not walls or void)
+      if (tileId !== 0 && tileId !== 255) {
+        ctx.fillStyle = '#3a2a18';
+        ctx.fillRect(c * T, r * T, T, 1);       // top edge
+        ctx.fillRect(c * T, r * T, 1, T);       // left edge
       }
     }
   }
@@ -803,6 +861,7 @@ canvas.addEventListener('mouseleave', () => {
 
 // ── Data fetching ─────────────────────────────────────────────────────
 async function fetchJSON(path, body) {
+  if (!AUTH) return null;
   try {
     const res = await fetch(`${BACKEND}${path}`, {
       method: 'POST',
@@ -812,10 +871,36 @@ async function fetchJSON(path, body) {
       },
       body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      if (res.status === 401) {
+        state.connected = false;
+        updateConnectionDot();
+        console.error('[War Room] 401 on', path, '- token may be invalid');
+      }
+      return null;
+    }
+    state.connected = true;
+    updateConnectionDot();
     return await res.json();
-  } catch (_) {
+  } catch (err) {
+    state.connected = false;
+    updateConnectionDot();
+    console.error('[War Room] fetch error:', path, err.message);
     return null;
+  }
+}
+
+function updateConnectionDot() {
+  const dot = document.getElementById('globalDot');
+  const info = document.getElementById('refreshInfo');
+  if (state.connected) {
+    dot.className = 'status-dot';
+    info.textContent = state.lastRefresh
+      ? `Updated ${Math.round((Date.now() - state.lastRefresh) / 1000)}s ago`
+      : 'Connected';
+  } else {
+    dot.className = 'status-dot error';
+    info.textContent = 'Connection failed (check token)';
   }
 }
 
@@ -881,12 +966,12 @@ function renderAgentList() {
       ? 'red'
       : s.status === 'active'
       ? 'green'
-      : s.status === 'idle'
+      : state.connected
       ? 'yellow'
       : 'gray';
     const statusText = s.status === 'active'
       ? `${s.sessions} sessions, ${s.toolCalls} calls`
-      : s.status === 'idle'
+      : state.connected
       ? 'Idle'
       : 'Offline';
     const displayName = a.name.includes(': ') ? a.name.split(': ')[1] : a.name;
@@ -1056,6 +1141,72 @@ async function sendChat() {
     appendChatMessage('System', `Network error: ${err.message}`, '#ff4444');
   }
 }
+
+// ── Floating chat: toggle + drag ─────────────────────────────────────
+function toggleChat() {
+  const win = document.getElementById('chatWindow');
+  const tab = document.getElementById('chatTab');
+  if (win.style.display === 'none') {
+    win.style.display = 'block';
+    tab.style.display = 'none';
+    document.getElementById('chatInput').focus();
+  } else {
+    win.style.display = 'none';
+    tab.style.display = 'flex';
+  }
+}
+
+// Drag handler for the title bar
+(function() {
+  const floatEl = document.getElementById('chatFloat');
+  const titleBar = document.getElementById('chatTitleBar');
+  let isDragging = false, startX, startY, startLeft, startTop;
+
+  titleBar.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    const rect = floatEl.getBoundingClientRect();
+    startX = e.clientX;
+    startY = e.clientY;
+    startLeft = rect.left;
+    startTop = rect.top;
+    // Switch from bottom/right to top/left positioning for drag
+    floatEl.style.left = rect.left + 'px';
+    floatEl.style.top = rect.top + 'px';
+    floatEl.style.right = 'auto';
+    floatEl.style.bottom = 'auto';
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', (e) => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    floatEl.style.left = (startLeft + dx) + 'px';
+    floatEl.style.top = (startTop + dy) + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (isDragging) {
+      isDragging = false;
+      // Save position
+      localStorage.setItem('chatPos', JSON.stringify({
+        left: floatEl.style.left, top: floatEl.style.top,
+      }));
+    }
+  });
+
+  // Restore position
+  const saved = localStorage.getItem('chatPos');
+  if (saved) {
+    try {
+      const pos = JSON.parse(saved);
+      floatEl.style.left = pos.left;
+      floatEl.style.top = pos.top;
+      floatEl.style.right = 'auto';
+      floatEl.style.bottom = 'auto';
+    } catch (_) {}
+  }
+})();
 
 // Boot: load all sprites first, then start render loop and data polling
 loadAllSprites().then(() => {
