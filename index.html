@@ -88,30 +88,30 @@ canvas {
 }
 
 .sidebar {
-  width: 380px;
+  width: 440px;
   background: #12121e;
   border-left: 2px solid #1e1e2e;
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 14px;
+  padding: 16px;
 }
 
 .panel {
   background: #1a1a2e;
   border: 1px solid #2a2a4a;
   border-radius: 6px;
-  margin-bottom: 14px;
-  padding: 14px;
+  margin-bottom: 16px;
+  padding: 16px;
 }
 
 .panel h3 {
-  font-size: 15px;
+  font-size: 20px;
   color: #00CCFF;
   text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 10px;
+  letter-spacing: 2px;
+  margin-bottom: 12px;
   border-bottom: 1px solid #2a2a4a;
-  padding-bottom: 6px;
+  padding-bottom: 8px;
 }
 
 .agent-row {
@@ -141,12 +141,12 @@ canvas {
 
 .agent-row .name {
   flex: 1;
-  font-size: 14px;
+  font-size: 18px;
   color: #ccc;
 }
 
 .agent-row .status-text {
-  font-size: 13px;
+  font-size: 16px;
   color: #888;
 }
 
@@ -165,13 +165,13 @@ canvas {
 }
 
 .kpi-box .value {
-  font-size: 26px;
+  font-size: 32px;
   color: #00CCFF;
   font-weight: bold;
 }
 
 .kpi-box .label {
-  font-size: 11px;
+  font-size: 14px;
   color: #666;
   text-transform: uppercase;
   margin-top: 4px;
@@ -183,8 +183,8 @@ canvas {
 }
 
 .activity-log .entry {
-  font-size: 13px;
-  padding: 5px 0;
+  font-size: 16px;
+  padding: 6px 0;
   border-bottom: 1px solid #1e1e2e;
   color: #999;
 }
@@ -278,20 +278,20 @@ canvas {
 
     <div class="panel">
       <h3>Pipeline Health</h3>
-      <div id="pipelineHealth" style="font-size: 13px; color: #888;">Loading...</div>
+      <div id="pipelineHealth" style="font-size: 16px; color: #888;">Loading...</div>
     </div>
 
     <div class="panel" style="display: flex; flex-direction: column;">
       <h3>Top Bot</h3>
-      <div id="chatMessages" style="max-height: 220px; overflow-y: auto; margin-bottom: 10px; font-size: 13px; color: #ccc;">
+      <div id="chatMessages" style="max-height: 250px; overflow-y: auto; margin-bottom: 12px; font-size: 16px; color: #ccc; line-height: 1.5;">
         <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
       </div>
-      <div style="display: flex; gap: 6px;">
+      <div style="display: flex; gap: 8px;">
         <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
-          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 8px 10px; font-family: 'PixelSans', monospace; font-size: 13px; border-radius: 4px; outline: none;"
+          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 10px 12px; font-family: 'PixelSans', monospace; font-size: 16px; border-radius: 4px; outline: none;"
           onkeydown="if(event.key==='Enter')sendChat()" />
         <button onclick="sendChat()"
-          style="background: #00CCFF; color: #0a0a14; border: none; padding: 8px 16px; font-family: 'PixelSans', monospace; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold;">
+          style="background: #00CCFF; color: #0a0a14; border: none; padding: 10px 20px; font-family: 'PixelSans', monospace; font-size: 16px; border-radius: 4px; cursor: pointer; font-weight: bold;">
           Send
         </button>
       </div>
@@ -319,9 +319,17 @@ const BACKEND = 'https://lpu-agent-backend.up.railway.app';
 
 // ── Auth ──────────────────────────────────────────────────────────────
 let AUTH = null;
+function cleanToken(raw) {
+  // Strip "Bearer " prefix if user pasted the full header
+  return raw.replace(/^Bearer\s+/i, '').trim();
+}
 function getAuth() {
   let token = localStorage.getItem('lpu_war_room_token');
-  if (token) return `Bearer ${token}`;
+  if (token) {
+    token = cleanToken(token);
+    localStorage.setItem('lpu_war_room_token', token);
+    return `Bearer ${token}`;
+  }
   return null;
 }
 function showAuthGate() {
@@ -343,7 +351,7 @@ function showAuthGate() {
   const input = document.getElementById('authTokenInput');
   const btn = document.getElementById('authSubmitBtn');
   function submit() {
-    const val = input.value.trim();
+    const val = cleanToken(input.value.trim());
     if (!val) return;
     localStorage.setItem('lpu_war_room_token', val);
     AUTH = `Bearer ${val}`;
@@ -652,17 +660,17 @@ function drawDeskUnit(agent) {
   // Position: top-left = (col, row), overhangs down to row+1
   spr(SPR.desk_front, col, row);
 
-  // PC: centered on middle tile of desk top
-  // DESK_FRONT top surface is at row * T (the top edge of the desk sprite)
-  // PC_FRONT is 16x32 source. Bottom half (base) should sit on desk surface.
-  // Desk surface pixel = row * T + 4*ZOOM (slight offset into desk top)
-  // PC bottom = deskSurface, so PC top = deskSurface - 32*ZOOM
+  // PC: sits ON the desk surface, centered on middle tile
+  // DESK_FRONT is 48x32 source drawn at (col, row). Desk surface top = row * T.
+  // PC_FRONT is 16x32 source. We want the PC base to rest on the desk top.
+  // PC base bottom = row * T (desk top edge), PC top = row*T - 32*ZOOM
   const pcImg = getPCSprite(agent.key);
   if (pcImg) {
-    const pcX = (col + 1) * T;
-    const deskSurface = row * T + 6 * ZOOM;
+    const pcW = 16 * ZOOM;
     const pcH = 32 * ZOOM;
-    ctx.drawImage(pcImg, pcX, deskSurface - pcH, 16 * ZOOM, pcH);
+    const pcX = (col + 1) * T + (T - pcW) / 2; // centered on middle desk tile
+    const pcY = row * T - pcH + 4 * ZOOM;       // base sits just on desk top
+    ctx.drawImage(pcImg, pcX, pcY, pcW, pcH);
   }
 
   // Chair: WOODEN_CHAIR_FRONT is 16x32 source -> 32x64 at 2x
