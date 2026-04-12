@@ -396,40 +396,42 @@ function showAuthGate() {
   async function submit() {
     const val = cleanToken(input.value);
     if (!val) return;
-    btn.textContent = 'Testing...';
+    btn.textContent = 'Connecting...';
     btn.disabled = true;
-    // Test the token against /health before accepting
+
+    // Test the token against an auth-required endpoint
     try {
-      const res = await fetch(`${BACKEND}/health`, {
-        headers: { 'Authorization': `Bearer ${val}` },
-      });
-      if (res.ok) {
-        localStorage.setItem('lpu_war_room_token', val);
-        AUTH = `Bearer ${val}`;
-        overlay.remove();
-        pollData();
-        return;
-      }
-    } catch (e) { /* network error */ }
-    // Also test without auth (health might not require it)
-    try {
-      const res2 = await fetch(`${BACKEND}/manager/tools/get_recruitment_kpis`, {
+      const res = await fetch(`${BACKEND}/manager/tools/get_recruitment_kpis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${val}` },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${val}`,
+        },
         body: JSON.stringify({ windows_hours: [24] }),
       });
-      if (res2.ok) {
+
+      if (res.ok || res.status !== 401) {
+        // Token accepted. Save and proceed.
         localStorage.setItem('lpu_war_room_token', val);
         AUTH = `Bearer ${val}`;
         overlay.remove();
         pollData();
         return;
       }
-    } catch (e) { /* network error */ }
-    btn.textContent = 'Invalid token. Try again.';
+    } catch (e) {
+      // Network error. Save token anyway, user might be offline temporarily.
+      localStorage.setItem('lpu_war_room_token', val);
+      AUTH = `Bearer ${val}`;
+      overlay.remove();
+      pollData();
+      return;
+    }
+
+    // 401: token is wrong
+    btn.textContent = 'Invalid token';
     btn.style.background = '#ff4444';
     btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'Connect'; btn.style.background = '#00CCFF'; }, 2000);
+    setTimeout(() => { btn.textContent = 'Connect'; btn.style.background = '#00CCFF'; }, 2500);
   }
   btn.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
