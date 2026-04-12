@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LPU War Room</title>
+<style>
+@font-face {
+  font-family: 'PixelSans';
+  src: url('assets/fonts/FSPixelSansUnicode-Regular.ttf') format('truetype');
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: #0a0a14;
+  color: #e0e0e0;
+  font-family: 'PixelSans', 'Courier New', monospace;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #12121e;
+  border-bottom: 2px solid #00CCFF;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 18px;
+  color: #00CCFF;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.header .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #5ac88c;
+  display: inline-block;
+  margin-right: 8px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.header .status-dot.error { background: #ff4444; }
+.header .status-dot.loading { background: #f59e0b; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.header .refresh-info {
+  font-size: 11px;
+  color: #666;
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0a0a14;
+  position: relative;
+}
+
+canvas {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.sidebar {
+  width: 320px;
+  background: #12121e;
+  border-left: 2px solid #1e1e2e;
+  overflow-y: auto;
+  flex-shrink: 0;
+  padding: 12px;
+}
+
+.panel {
+  background: #1a1a2e;
+  border: 1px solid #2a2a4a;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  padding: 10px;
+}
+
+.panel h3 {
+  font-size: 12px;
+  color: #00CCFF;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #2a2a4a;
+  padding-bottom: 4px;
+}
+
+.agent-row {
+  display: flex;
+  align-items: center;
+  padding: 6px 4px;
+  border-bottom: 1px solid #1e1e2e;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.agent-row:hover { background: #ffffff08; }
+.agent-row:last-child { border-bottom: none; }
+
+.agent-row .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.agent-row .dot.green { background: #5ac88c; }
+.agent-row .dot.yellow { background: #f59e0b; }
+.agent-row .dot.red { background: #ff4444; }
+.agent-row .dot.gray { background: #555; }
+
+.agent-row .name {
+  flex: 1;
+  font-size: 11px;
+  color: #ccc;
+}
+
+.agent-row .status-text {
+  font-size: 10px;
+  color: #888;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.kpi-box {
+  background: #0a0a14;
+  border: 1px solid #2a2a4a;
+  border-radius: 3px;
+  padding: 8px;
+  text-align: center;
+}
+
+.kpi-box .value {
+  font-size: 20px;
+  color: #00CCFF;
+  font-weight: bold;
+}
+
+.kpi-box .label {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.activity-log {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.activity-log .entry {
+  font-size: 10px;
+  padding: 3px 0;
+  border-bottom: 1px solid #1e1e2e;
+  color: #999;
+}
+
+.activity-log .entry .time {
+  color: #555;
+  margin-right: 4px;
+}
+
+.activity-log .entry .agent-tag {
+  color: #00CCFF;
+  margin-right: 4px;
+}
+
+.tooltip {
+  position: absolute;
+  background: #1a1a2e;
+  border: 1px solid #00CCFF;
+  border-radius: 4px;
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #e0e0e0;
+  pointer-events: none;
+  z-index: 100;
+  display: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  max-width: 250px;
+}
+
+.tooltip .tt-name {
+  color: #00CCFF;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.tooltip .tt-status {
+  color: #5ac88c;
+  font-size: 10px;
+}
+
+.tooltip .tt-detail {
+  color: #888;
+  font-size: 9px;
+  margin-top: 4px;
+}
+
+@media (max-width: 900px) {
+  .main { flex-direction: column; }
+  .sidebar { width: 100%; max-height: 40vh; border-left: none; border-top: 2px solid #1e1e2e; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display: flex; align-items: center;">
+    <span class="status-dot" id="globalDot"></span>
+    <h1>LPU War Room</h1>
+  </div>
+  <div class="refresh-info" id="refreshInfo">Connecting...</div>
+</div>
+
+<div class="main">
+  <div class="canvas-wrap" id="canvasWrap">
+    <canvas id="office" width="672" height="384"></canvas>
+    <div class="tooltip" id="tooltip"></div>
+  </div>
+
+  <div class="sidebar">
+    <div class="panel">
+      <h3>Agent Status</h3>
+      <div id="agentList"></div>
+    </div>
+
+    <div class="panel">
+      <h3>24h KPIs</h3>
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-box"><div class="value" id="kpiJobsPub">--</div><div class="label">Jobs Published</div></div>
+        <div class="kpi-box"><div class="value" id="kpiApps">--</div><div class="label">Applications</div></div>
+        <div class="kpi-box"><div class="value" id="kpiMatches">--</div><div class="label">Matches</div></div>
+        <div class="kpi-box"><div class="value" id="kpiOutreach">--</div><div class="label">Outreach Sent</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Activity Feed</h3>
+      <div class="activity-log" id="activityLog">
+        <div class="entry"><span class="time">--:--</span> Waiting for data...</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Pipeline Health</h3>
+      <div id="pipelineHealth" style="font-size: 11px; color: #888;">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// LPU War Room - Pixel Office Dashboard
+// =====================================================================
+
+const TILE = 16;
+const ZOOM = 2;
+const COLS = 21;
+const ROWS = 12; // Only render the office portion (rows 10-21)
+const SPRITE_W = 16;
+const SPRITE_H = 24;
+const FRAME_COLS = 7;
+const FRAME_ROWS = 4; // down, left, right, up
+
+const BACKEND = 'https://lpu-agent-backend.up.railway.app';
+const AUTH = 'Bearer sk-agent1-F4BE6NfwppoffB5VIIG0kTsc71pI5He526aUWEKpzFg';
+
+// Agent definitions: map to LPU's 6 agents + RM + Top Bot
+const AGENTS = [
+  { key: 'lpu-agent-1-job-sourcing', name: 'Agent 1: Job Sourcing', short: 'A1', char: 0, desk: { col: 3, row: 2 }, color: '#5ac88c' },
+  { key: 'lpu-agent-2-physician-finder', name: 'Agent 2: Physician Finder', short: 'A2', char: 1, desk: { col: 7, row: 2 }, color: '#00CCFF' },
+  { key: 'lpu-agent-3-qualification', name: 'Agent 3: Qualification', short: 'A3', char: 2, desk: { col: 3, row: 6 }, color: '#c88c5a' },
+  { key: 'lpu-agent-4-name-clear', name: 'Agent 4: Name Clear', short: 'A4', char: 3, desk: { col: 7, row: 6 }, color: '#c85a8c' },
+  { key: 'lpu-recruitment-manager', name: 'Recruitment Manager', short: 'RM', char: 4, desk: { col: 14, row: 3 }, color: '#f59e0b' },
+  { key: 'lpu-top-bot', name: 'Top Bot', short: 'TB', char: 5, desk: { col: 14, row: 7 }, color: '#ff6b6b' },
+];
+
+// State
+const state = {
+  agents: {},    // key -> { status, lastRun, errors, sessions, detail }
+  kpis: null,
+  lastRefresh: null,
+  activityLog: [],
+  connected: false,
+};
+
+// Canvas setup
+const canvas = document.getElementById('office');
+const ctx = canvas.getContext('2d');
+canvas.width = COLS * TILE * ZOOM;
+canvas.height = ROWS * TILE * ZOOM;
+ctx.imageSmoothingEnabled = false;
+
+// Floor tile colors
+const FLOOR_COLORS = {
+  0:   '#2a2a3a',  // walls
+  1:   '#3a4a5a',  // blue-gray floor
+  7:   '#4a3a2a',  // warm wood floor
+  9:   '#333340',  // dark floor (break room)
+  255: '#0a0a14',  // void
+};
+
+// Office layout (rows 10-21 of the default layout)
+const OFFICE_TILES = [
+  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,9,9,9,9,9,9,9,9,0,255],
+  [0,7,7,7,7,7,7,7,7,7,0,9,9,9,9,9,9,9,9,0,255],
+  [255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255],
+];
+
+// Furniture sprites to draw (simplified static rendering)
+const FURNITURE = [
+  // Desks - left room
+  { type: 'desk', col: 2, row: 2, w: 3, h: 1, color: '#5a4a3a' },
+  { type: 'desk', col: 6, row: 2, w: 3, h: 1, color: '#5a4a3a' },
+  // Table - left room
+  { type: 'table', col: 4, row: 6, w: 3, h: 1, color: '#6a5a4a' },
+  // Desks - right room (RM + Top Bot)
+  { type: 'desk', col: 13, row: 3, w: 3, h: 1, color: '#3a4a5a' },
+  { type: 'desk', col: 13, row: 7, w: 3, h: 1, color: '#3a4a5a' },
+  // Whiteboard
+  { type: 'whiteboard', col: 12, row: 0, w: 2, h: 1, color: '#eee' },
+  // Plants
+  { type: 'plant', col: 18, row: 1, w: 1, h: 1, color: '#3a8a3a' },
+  { type: 'plant', col: 1, row: 8, w: 1, h: 1, color: '#3a8a3a' },
+  // Bookshelf
+  { type: 'bookshelf', col: 2, row: 0, w: 2, h: 1, color: '#5a3a2a' },
+  { type: 'bookshelf', col: 7, row: 0, w: 2, h: 1, color: '#5a3a2a' },
+];
+
+// Character sprites
+const charImages = [];
+let charsLoaded = 0;
+
+for (let i = 0; i < 6; i++) {
+  const img = new Image();
+  img.src = `assets/characters/char_${i}.png`;
+  img.onload = () => { charsLoaded++; };
+  charImages.push(img);
+}
+
+// Animation state
+let frameCount = 0;
+const ANIM_SPEED = 12; // frames per animation step
+
+// ── Drawing ──────────────────────────────────────────────────────────
+
+function drawFloor() {
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const tile = OFFICE_TILES[r][c];
+      const color = FLOOR_COLORS[tile] || FLOOR_COLORS[255];
+      ctx.fillStyle = color;
+      ctx.fillRect(c * TILE * ZOOM, r * TILE * ZOOM, TILE * ZOOM, TILE * ZOOM);
+
+      // Subtle grid lines for floor tiles
+      if (tile !== 255 && tile !== 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.strokeRect(c * TILE * ZOOM, r * TILE * ZOOM, TILE * ZOOM, TILE * ZOOM);
+      }
+    }
+  }
+
+  // Wall top border accent
+  ctx.fillStyle = '#00CCFF';
+  ctx.fillRect(0, 0, COLS * TILE * ZOOM, 2);
+}
+
+function drawFurniture() {
+  for (const f of FURNITURE) {
+    const x = f.col * TILE * ZOOM;
+    const y = f.row * TILE * ZOOM;
+    const w = f.w * TILE * ZOOM;
+    const h = f.h * TILE * ZOOM;
+
+    if (f.type === 'desk') {
+      // Desk body
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x, y, w, h);
+      // Desk top highlight
+      ctx.fillStyle = 'rgba(255,255,255,0.1)';
+      ctx.fillRect(x, y, w, 2);
+      // Monitor
+      const mx = x + w / 2 - 4 * ZOOM;
+      ctx.fillStyle = '#1a1a2e';
+      ctx.fillRect(mx, y - 6 * ZOOM, 8 * ZOOM, 5 * ZOOM);
+      // Screen glow
+      const agentAtDesk = AGENTS.find(a => a.desk.col >= f.col && a.desk.col < f.col + f.w && Math.abs(a.desk.row - f.row) <= 1);
+      const agentState = agentAtDesk ? state.agents[agentAtDesk.key] : null;
+      if (agentState && agentState.status === 'active') {
+        ctx.fillStyle = agentAtDesk.color + '80';
+        ctx.fillRect(mx + 1, y - 5 * ZOOM, 8 * ZOOM - 2, 4 * ZOOM - 1);
+      } else {
+        ctx.fillStyle = '#333';
+        ctx.fillRect(mx + 1, y - 5 * ZOOM, 8 * ZOOM - 2, 4 * ZOOM - 1);
+      }
+    } else if (f.type === 'table') {
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillRect(x, y, w, 2);
+    } else if (f.type === 'whiteboard') {
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x, y + 2, w, h - 2);
+      ctx.fillStyle = '#999';
+      ctx.fillRect(x, y, w, 2);
+      // "LPU" text on whiteboard
+      ctx.fillStyle = '#00CCFF';
+      ctx.font = `${8 * ZOOM}px PixelSans, monospace`;
+      ctx.fillText('LPU', x + 4, y + h - 2);
+    } else if (f.type === 'plant') {
+      // Pot
+      ctx.fillStyle = '#8a5a3a';
+      ctx.fillRect(x + 4 * ZOOM, y + 8 * ZOOM, 8 * ZOOM, 6 * ZOOM);
+      // Leaves
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x + 2 * ZOOM, y, 12 * ZOOM, 10 * ZOOM);
+      ctx.fillStyle = '#2a7a2a';
+      ctx.fillRect(x + 4 * ZOOM, y + 2 * ZOOM, 8 * ZOOM, 6 * ZOOM);
+    } else if (f.type === 'bookshelf') {
+      ctx.fillStyle = f.color;
+      ctx.fillRect(x, y, w, h);
+      // Books
+      const bookColors = ['#c44', '#48c', '#4a4', '#cc4', '#a4c'];
+      for (let b = 0; b < 5; b++) {
+        ctx.fillStyle = bookColors[b];
+        ctx.fillRect(x + (b * 6 + 2) * ZOOM, y + 2 * ZOOM, 4 * ZOOM, h - 4 * ZOOM);
+      }
+    }
+  }
+}
+
+function drawCharacter(agent, index) {
+  const charImg = charImages[agent.char];
+  if (!charImg || !charImg.complete) return;
+
+  const agentState = state.agents[agent.key];
+  const isActive = agentState && agentState.status === 'active';
+  const hasError = agentState && agentState.errors > 0;
+
+  // Animation frame
+  const animFrame = isActive
+    ? Math.floor(frameCount / ANIM_SPEED) % 4 + 1  // typing animation (frames 1-4)
+    : 0;  // idle (frame 0)
+
+  // Direction: 0=down (facing screen)
+  const dir = 0;
+
+  // Source rect from sprite sheet
+  const sx = animFrame * SPRITE_W;
+  const sy = dir * SPRITE_H;
+
+  // Destination: at the agent's desk, offset to sit in front
+  const dx = agent.desk.col * TILE * ZOOM;
+  const dy = (agent.desk.row + 1) * TILE * ZOOM - SPRITE_H * ZOOM;
+
+  // Draw character
+  ctx.drawImage(
+    charImg,
+    sx, sy, SPRITE_W, SPRITE_H,
+    dx, dy, SPRITE_W * ZOOM, SPRITE_H * ZOOM
+  );
+
+  // Name tag below
+  ctx.fillStyle = agent.color;
+  ctx.font = `${6 * ZOOM}px PixelSans, monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(agent.short, dx + SPRITE_W * ZOOM / 2, dy + SPRITE_H * ZOOM + 8 * ZOOM);
+  ctx.textAlign = 'left';
+
+  // Status indicator dot
+  const dotX = dx + SPRITE_W * ZOOM + 2;
+  const dotY = dy + 4;
+  ctx.beginPath();
+  ctx.arc(dotX, dotY, 3 * ZOOM, 0, Math.PI * 2);
+  if (hasError) {
+    ctx.fillStyle = '#ff4444';
+  } else if (isActive) {
+    ctx.fillStyle = '#5ac88c';
+  } else {
+    ctx.fillStyle = '#555';
+  }
+  ctx.fill();
+
+  // Store hitbox for tooltip
+  agent._hitbox = { x: dx, y: dy, w: SPRITE_W * ZOOM, h: SPRITE_H * ZOOM };
+}
+
+function render() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawFloor();
+  drawFurniture();
+  for (let i = 0; i < AGENTS.length; i++) {
+    drawCharacter(AGENTS[i], i);
+  }
+  frameCount++;
+  requestAnimationFrame(render);
+}
+
+// ── Tooltip ──────────────────────────────────────────────────────────
+
+const tooltipEl = document.getElementById('tooltip');
+
+canvas.addEventListener('mousemove', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const my = e.clientY - rect.top;
+
+  let found = null;
+  for (const a of AGENTS) {
+    if (!a._hitbox) continue;
+    const h = a._hitbox;
+    if (mx >= h.x && mx <= h.x + h.w && my >= h.y && my <= h.y + h.h) {
+      found = a;
+      break;
+    }
+  }
+
+  if (found) {
+    const s = state.agents[found.key] || {};
+    tooltipEl.innerHTML = `
+      <div class="tt-name">${found.name}</div>
+      <div class="tt-status">${s.status || 'unknown'} ${s.errors > 0 ? '(' + s.errors + ' errors)' : ''}</div>
+      <div class="tt-detail">${s.detail || 'No data yet'}</div>
+    `;
+    tooltipEl.style.display = 'block';
+    tooltipEl.style.left = (e.clientX + 12) + 'px';
+    tooltipEl.style.top = (e.clientY - 40) + 'px';
+  } else {
+    tooltipEl.style.display = 'none';
+  }
+});
+
+canvas.addEventListener('mouseleave', () => {
+  tooltipEl.style.display = 'none';
+});
+
+// ── Data Fetching ────────────────────────────────────────────────────
+
+async function fetchJSON(path, body) {
+  try {
+    const res = await fetch(`${BACKEND}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': AUTH,
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+function addActivity(agent, text) {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  state.activityLog.unshift({ time, agent, text });
+  if (state.activityLog.length > 50) state.activityLog.pop();
+  renderActivityLog();
+}
+
+async function refreshAgentStatuses() {
+  for (const agent of AGENTS) {
+    const data = await fetchJSON('/manager/tools/get_agent_status', {
+      agent_key: agent.key,
+      hours: 24,
+    });
+    if (data) {
+      const prev = state.agents[agent.key];
+      state.agents[agent.key] = {
+        status: data.sessions_in_window > 0 ? 'active' : 'idle',
+        lastRun: data.last_session_at,
+        lastStopReason: data.last_stop_reason,
+        errors: data.recent_errors || 0,
+        sessions: data.sessions_in_window || 0,
+        toolCalls: data.tool_call_count_in_window || 0,
+        detail: data.detail || '',
+      };
+      // Log state changes
+      if (prev && prev.status !== state.agents[agent.key].status) {
+        addActivity(agent.short, `status changed to ${state.agents[agent.key].status}`);
+      }
+    }
+  }
+  state.connected = true;
+  renderAgentList();
+}
+
+async function refreshKPIs() {
+  const data = await fetchJSON('/manager/tools/get_recruitment_kpis', {
+    windows_hours: [24],
+  });
+  if (data && data.windows && data.windows['24h']) {
+    state.kpis = data.windows['24h'];
+    renderKPIs();
+  }
+}
+
+async function refreshPipelineHealth() {
+  const data = await fetchJSON('/tools/run_agent2_health_report', {
+    hours: 24,
+  });
+  if (data && data.summary) {
+    renderPipelineHealth(data.summary);
+  }
+}
+
+// ── Sidebar Rendering ────────────────────────────────────────────────
+
+function renderAgentList() {
+  const el = document.getElementById('agentList');
+  el.innerHTML = AGENTS.map(a => {
+    const s = state.agents[a.key] || {};
+    const dotClass = s.errors > 0 ? 'red' : s.status === 'active' ? 'green' : s.status === 'idle' ? 'yellow' : 'gray';
+    const statusText = s.status === 'active'
+      ? `${s.sessions} sessions, ${s.toolCalls} calls`
+      : s.status === 'idle'
+      ? 'Idle'
+      : 'Offline';
+    return `
+      <div class="agent-row">
+        <span class="dot ${dotClass}"></span>
+        <span class="name" style="color: ${a.color}">${a.short}</span>
+        <span class="name" style="margin-left: 4px">${a.name.split(': ')[1] || a.name}</span>
+        <span class="status-text">${statusText}</span>
+      </div>
+    `;
+  }).join('');
+
+  // Update global dot
+  const dot = document.getElementById('globalDot');
+  const hasErrors = AGENTS.some(a => (state.agents[a.key] || {}).errors > 0);
+  dot.className = 'status-dot' + (hasErrors ? ' error' : state.connected ? '' : ' loading');
+}
+
+function renderKPIs() {
+  if (!state.kpis) return;
+  document.getElementById('kpiJobsPub').textContent = state.kpis.jobs_published || 0;
+  document.getElementById('kpiApps').textContent = state.kpis.applications || 0;
+  document.getElementById('kpiMatches').textContent = state.kpis.matches || 0;
+  document.getElementById('kpiOutreach').textContent = state.kpis.outreach_sent || 0;
+}
+
+function renderActivityLog() {
+  const el = document.getElementById('activityLog');
+  el.innerHTML = state.activityLog.map(e => `
+    <div class="entry">
+      <span class="time">${e.time}</span>
+      <span class="agent-tag">[${e.agent}]</span>
+      ${e.text}
+    </div>
+  `).join('') || '<div class="entry">No activity yet</div>';
+}
+
+function renderPipelineHealth(summary) {
+  const el = document.getElementById('pipelineHealth');
+  const e = summary.enrichment || {};
+  const m = summary.matches || {};
+  const o = summary.outreach || {};
+  const g = summary.gap_queue || {};
+
+  el.innerHTML = `
+    <div style="margin-bottom: 6px;">
+      <span style="color: #00CCFF;">Contact Pool:</span>
+      ${e.total_contacts || 0} total, ${e.enriched_pct || 0}% enriched
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #00CCFF;">Matches (24h):</span>
+      ${m.total_window || 0} new
+    </div>
+    <div style="margin-bottom: 6px;">
+      <span style="color: #00CCFF;">Outreach:</span>
+      ${(o.events_by_kind_window || {}).sent || 0} sent,
+      ${(o.events_by_kind_window || {}).replied || 0} replied
+    </div>
+    <div>
+      <span style="color: #00CCFF;">Gap Queue:</span>
+      ${g.count || 0} jobs under-covered
+    </div>
+  `;
+}
+
+// ── Refresh Info ─────────────────────────────────────────────────────
+
+function updateRefreshInfo() {
+  const el = document.getElementById('refreshInfo');
+  if (!state.lastRefresh) {
+    el.textContent = 'Connecting...';
+    return;
+  }
+  const ago = Math.floor((Date.now() - state.lastRefresh) / 1000);
+  if (ago < 60) {
+    el.textContent = `Updated ${ago}s ago`;
+  } else {
+    el.textContent = `Updated ${Math.floor(ago / 60)}m ago`;
+  }
+}
+
+// ── Main Loop ────────────────────────────────────────────────────────
+
+async function pollData() {
+  try {
+    await refreshAgentStatuses();
+    await refreshKPIs();
+    await refreshPipelineHealth();
+    state.lastRefresh = Date.now();
+    addActivity('SYS', 'Data refreshed');
+  } catch (err) {
+    addActivity('SYS', 'Refresh failed: ' + err.message);
+  }
+}
+
+// Initial render
+render();
+renderAgentList();
+
+// Initial fetch + 60s polling
+pollData();
+setInterval(pollData, 60000);
+setInterval(updateRefreshInfo, 5000);
+</script>
+
+</body>
+</html>
