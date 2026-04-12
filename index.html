@@ -26,14 +26,15 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 16px;
+  padding: 6px 16px;
   background: #12121e;
   border-bottom: 2px solid #00CCFF;
   flex-shrink: 0;
+  height: 36px;
 }
 
 .header h1 {
-  font-size: 18px;
+  font-size: 16px;
   color: #00CCFF;
   letter-spacing: 2px;
   text-transform: uppercase;
@@ -71,48 +72,52 @@ body {
 .canvas-wrap {
   flex: 1;
   display: flex;
-  align-items: center;
+  align-items: stretch;
   justify-content: center;
   background: #0a0a14;
   position: relative;
+  overflow: hidden;
 }
 
 canvas {
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .sidebar {
-  width: 320px;
+  width: 380px;
   background: #12121e;
   border-left: 2px solid #1e1e2e;
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 12px;
+  padding: 14px;
 }
 
 .panel {
   background: #1a1a2e;
   border: 1px solid #2a2a4a;
-  border-radius: 4px;
-  margin-bottom: 12px;
-  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 14px;
+  padding: 14px;
 }
 
 .panel h3 {
-  font-size: 12px;
+  font-size: 15px;
   color: #00CCFF;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 8px;
+  letter-spacing: 1.5px;
+  margin-bottom: 10px;
   border-bottom: 1px solid #2a2a4a;
-  padding-bottom: 4px;
+  padding-bottom: 6px;
 }
 
 .agent-row {
   display: flex;
   align-items: center;
-  padding: 6px 4px;
+  padding: 8px 6px;
   border-bottom: 1px solid #1e1e2e;
   cursor: pointer;
   transition: background 0.15s;
@@ -122,10 +127,10 @@ canvas {
 .agent-row:last-child { border-bottom: none; }
 
 .agent-row .dot {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
-  margin-right: 8px;
+  margin-right: 10px;
   flex-shrink: 0;
 }
 
@@ -136,12 +141,12 @@ canvas {
 
 .agent-row .name {
   flex: 1;
-  font-size: 11px;
+  font-size: 14px;
   color: #ccc;
 }
 
 .agent-row .status-text {
-  font-size: 10px;
+  font-size: 13px;
   color: #888;
 }
 
@@ -160,16 +165,16 @@ canvas {
 }
 
 .kpi-box .value {
-  font-size: 20px;
+  font-size: 26px;
   color: #00CCFF;
   font-weight: bold;
 }
 
 .kpi-box .label {
-  font-size: 9px;
+  font-size: 11px;
   color: #666;
   text-transform: uppercase;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .activity-log {
@@ -178,20 +183,20 @@ canvas {
 }
 
 .activity-log .entry {
-  font-size: 10px;
-  padding: 3px 0;
+  font-size: 13px;
+  padding: 5px 0;
   border-bottom: 1px solid #1e1e2e;
   color: #999;
 }
 
 .activity-log .entry .time {
   color: #555;
-  margin-right: 4px;
+  margin-right: 6px;
 }
 
 .activity-log .entry .agent-tag {
   color: #00CCFF;
-  margin-right: 4px;
+  margin-right: 6px;
 }
 
 .tooltip {
@@ -273,20 +278,20 @@ canvas {
 
     <div class="panel">
       <h3>Pipeline Health</h3>
-      <div id="pipelineHealth" style="font-size: 11px; color: #888;">Loading...</div>
+      <div id="pipelineHealth" style="font-size: 13px; color: #888;">Loading...</div>
     </div>
 
     <div class="panel" style="display: flex; flex-direction: column;">
       <h3>Top Bot</h3>
-      <div id="chatMessages" style="max-height: 200px; overflow-y: auto; margin-bottom: 8px; font-size: 11px; color: #ccc;">
+      <div id="chatMessages" style="max-height: 220px; overflow-y: auto; margin-bottom: 10px; font-size: 13px; color: #ccc;">
         <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
       </div>
-      <div style="display: flex; gap: 4px;">
+      <div style="display: flex; gap: 6px;">
         <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
-          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 6px 8px; font-family: 'PixelSans', monospace; font-size: 11px; border-radius: 3px; outline: none;"
+          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 8px 10px; font-family: 'PixelSans', monospace; font-size: 13px; border-radius: 4px; outline: none;"
           onkeydown="if(event.key==='Enter')sendChat()" />
         <button onclick="sendChat()"
-          style="background: #00CCFF; color: #0a0a14; border: none; padding: 6px 12px; font-family: 'PixelSans', monospace; font-size: 11px; border-radius: 3px; cursor: pointer; font-weight: bold;">
+          style="background: #00CCFF; color: #0a0a14; border: none; padding: 8px 16px; font-family: 'PixelSans', monospace; font-size: 13px; border-radius: 4px; cursor: pointer; font-weight: bold;">
           Send
         </button>
       </div>
@@ -540,10 +545,10 @@ function drawFloor() {
   };
 
   const fallbackColors = {
-    0:   '#2a2a3a',
-    1:   '#3a4a5a',
-    7:   '#4a3a2a',
-    9:   '#333340',
+    0:   '#1a1520',
+    1:   '#5a4535',
+    7:   '#6b5030',
+    9:   '#3a2a1a',
     255: '#0a0a14',
   };
 
@@ -648,16 +653,16 @@ function drawDeskUnit(agent) {
   spr(SPR.desk_front, col, row);
 
   // PC: centered on middle tile of desk top
-  // PC is 16x32 source -> 32x64 at 2x
-  // We want it sitting ON the desk surface which is at row, so offset up by PC height
-  const pcX = (col + 1) * T;          // middle tile of 3-tile desk
-  const pcY = row * T - 32 * ZOOM;    // above the desk top edge (32px source * 2)
-  // Actually: desk top is at row*T, PC should sit on that surface
-  // PC_FRONT is 16x32: top 16px is screen, bottom 16px is base on desk
-  // Place base at desk top row: y = row*T - 16*ZOOM (so base aligns with desk surface)
+  // DESK_FRONT top surface is at row * T (the top edge of the desk sprite)
+  // PC_FRONT is 16x32 source. Bottom half (base) should sit on desk surface.
+  // Desk surface pixel = row * T + 4*ZOOM (slight offset into desk top)
+  // PC bottom = deskSurface, so PC top = deskSurface - 32*ZOOM
   const pcImg = getPCSprite(agent.key);
   if (pcImg) {
-    ctx.drawImage(pcImg, pcX, row * T - 16 * ZOOM, 16 * ZOOM, 32 * ZOOM);
+    const pcX = (col + 1) * T;
+    const deskSurface = row * T + 6 * ZOOM;
+    const pcH = 32 * ZOOM;
+    ctx.drawImage(pcImg, pcX, deskSurface - pcH, 16 * ZOOM, pcH);
   }
 
   // Chair: WOODEN_CHAIR_FRONT is 16x32 source -> 32x64 at 2x
