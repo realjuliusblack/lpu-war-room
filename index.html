@@ -195,7 +195,7 @@ canvas {
 }
 
 .tooltip {
-  position: absolute;
+  position: fixed;
   background: #1a1a2e;
   border: 1px solid #00CCFF;
   border-radius: 4px;
@@ -244,7 +244,7 @@ canvas {
 
 <div class="main">
   <div class="canvas-wrap" id="canvasWrap">
-    <canvas id="office" width="672" height="384"></canvas>
+    <canvas id="office"></canvas>
     <div class="tooltip" id="tooltip"></div>
   </div>
 
@@ -275,6 +275,22 @@ canvas {
       <h3>Pipeline Health</h3>
       <div id="pipelineHealth" style="font-size: 11px; color: #888;">Loading...</div>
     </div>
+
+    <div class="panel" style="display: flex; flex-direction: column;">
+      <h3>Top Bot</h3>
+      <div id="chatMessages" style="max-height: 200px; overflow-y: auto; margin-bottom: 8px; font-size: 11px; color: #ccc;">
+        <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
+      </div>
+      <div style="display: flex; gap: 4px;">
+        <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
+          style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0; padding: 6px 8px; font-family: 'PixelSans', monospace; font-size: 11px; border-radius: 3px; outline: none;"
+          onkeydown="if(event.key==='Enter')sendChat()" />
+        <button onclick="sendChat()"
+          style="background: #00CCFF; color: #0a0a14; border: none; padding: 6px 12px; font-family: 'PixelSans', monospace; font-size: 11px; border-radius: 3px; cursor: pointer; font-weight: bold;">
+          Send
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -286,263 +302,432 @@ canvas {
 const TILE = 16;
 const ZOOM = 2;
 const COLS = 21;
-const ROWS = 12; // Only render the office portion (rows 10-21)
+const ROWS = 12;
+const T = TILE * ZOOM; // pixels per tile at zoom (32)
+
 const SPRITE_W = 16;
 const SPRITE_H = 24;
 const FRAME_COLS = 7;
-const FRAME_ROWS = 4; // down, left, right, up
+const ANIM_SPEED = 14; // canvas frames per sprite step
 
 const BACKEND = 'https://lpu-agent-backend.up.railway.app';
-const AUTH = 'Bearer sk-agent1-F4BE6NfwppoffB5VIIG0kTsc71pI5He526aUWEKpzFg';
 
-// Agent definitions: map to LPU's 6 agents + RM + Top Bot
+// ── Auth ──────────────────────────────────────────────────────────────
+function getAuth() {
+  let token = localStorage.getItem('lpu_war_room_token');
+  if (!token) {
+    token = prompt('Enter your LPU agent bearer token (sk-agent1-...)');
+    if (token) localStorage.setItem('lpu_war_room_token', token);
+  }
+  return token ? `Bearer ${token}` : null;
+}
+const AUTH = getAuth();
+
+// ── Agent definitions ─────────────────────────────────────────────────
+// desk.col/row = top-left tile of the desk footprint (DESK_FRONT is 3w x 2h)
+// char.col/row = column the character sits at (center of chair in front of desk)
 const AGENTS = [
-  { key: 'lpu-agent-1-job-sourcing', name: 'Agent 1: Job Sourcing', short: 'A1', char: 0, desk: { col: 3, row: 2 }, color: '#5ac88c' },
-  { key: 'lpu-agent-2-physician-finder', name: 'Agent 2: Physician Finder', short: 'A2', char: 1, desk: { col: 7, row: 2 }, color: '#00CCFF' },
-  { key: 'lpu-agent-3-qualification', name: 'Agent 3: Qualification', short: 'A3', char: 2, desk: { col: 3, row: 6 }, color: '#c88c5a' },
-  { key: 'lpu-agent-4-name-clear', name: 'Agent 4: Name Clear', short: 'A4', char: 3, desk: { col: 7, row: 6 }, color: '#c85a8c' },
-  { key: 'lpu-recruitment-manager', name: 'Recruitment Manager', short: 'RM', char: 4, desk: { col: 14, row: 3 }, color: '#f59e0b' },
-  { key: 'lpu-top-bot', name: 'Top Bot', short: 'TB', char: 5, desk: { col: 14, row: 7 }, color: '#ff6b6b' },
+  {
+    key: 'lpu-agent-1-job-sourcing',
+    name: 'Agent 1: Job Sourcing',
+    short: 'A1',
+    char: 0,
+    desk: { col: 2, row: 1 },
+    color: '#5ac88c',
+  },
+  {
+    key: 'lpu-agent-2-physician-finder',
+    name: 'Agent 2: Physician Finder',
+    short: 'A2',
+    char: 1,
+    desk: { col: 6, row: 1 },
+    color: '#00CCFF',
+  },
+  {
+    key: 'lpu-agent-3-qualification',
+    name: 'Agent 3: Qualification',
+    short: 'A3',
+    char: 2,
+    desk: { col: 2, row: 5 },
+    color: '#c88c5a',
+  },
+  {
+    key: 'lpu-agent-4-name-clear',
+    name: 'Agent 4: Name Clear',
+    short: 'A4',
+    char: 3,
+    desk: { col: 6, row: 5 },
+    color: '#c85a8c',
+  },
+  {
+    key: 'lpu-agent-5-background',
+    name: 'Agent 5: Background Check',
+    short: 'A5',
+    char: 0,
+    desk: { col: 12, row: 1 },
+    color: '#8c5ac8',
+  },
+  {
+    key: 'lpu-agent-6-presentation',
+    name: 'Agent 6: Presentation',
+    short: 'A6',
+    char: 1,
+    desk: { col: 16, row: 1 },
+    color: '#5ac8c8',
+  },
+  {
+    key: 'lpu-recruitment-manager',
+    name: 'Recruitment Manager',
+    short: 'RM',
+    char: 4,
+    desk: { col: 12, row: 5 },
+    color: '#f59e0b',
+  },
+  {
+    key: 'lpu-top-bot',
+    name: 'Top Bot',
+    short: 'TB',
+    char: 5,
+    desk: { col: 16, row: 5 },
+    color: '#ff6b6b',
+  },
 ];
 
-// State
+// ── State ─────────────────────────────────────────────────────────────
 const state = {
-  agents: {},    // key -> { status, lastRun, errors, sessions, detail }
+  agents: {},
   kpis: null,
   lastRefresh: null,
   activityLog: [],
   connected: false,
 };
 
-// Canvas setup
+// ── Canvas ────────────────────────────────────────────────────────────
 const canvas = document.getElementById('office');
 const ctx = canvas.getContext('2d');
-canvas.width = COLS * TILE * ZOOM;
-canvas.height = ROWS * TILE * ZOOM;
+canvas.width = COLS * T;
+canvas.height = ROWS * T;
 ctx.imageSmoothingEnabled = false;
 
-// Floor tile colors
-const FLOOR_COLORS = {
-  0:   '#2a2a3a',  // walls
-  1:   '#3a4a5a',  // blue-gray floor
-  7:   '#4a3a2a',  // warm wood floor
-  9:   '#333340',  // dark floor (break room)
-  255: '#0a0a14',  // void
-};
-
-// Office layout (rows 10-21 of the default layout)
+// ── Floor tile map ────────────────────────────────────────────────────
+// 0=wall, 1=blue-gray (right room), 7=warm wood (left room),
+// 9=dark break room, 255=void
 const OFFICE_TILES = [
-  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,1,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,1,1,1,1,1,1,1,1,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,9,9,9,9,9,9,9,9,0,255],
-  [0,7,7,7,7,7,7,7,7,7,0,9,9,9,9,9,9,9,9,0,255],
+  [0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  1,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  1,  1,  1,  1,  1,  1,  1,  1,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  9,  9,  9,  9,  9,  9,  9,  9,  0, 255],
+  [0,  7,  7,  7,  7,  7,  7,  7,  7,  7,  0,  9,  9,  9,  9,  9,  9,  9,  9,  0, 255],
   [255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255],
 ];
 
-// Furniture sprites to draw (simplified static rendering)
-const FURNITURE = [
-  // Desks - left room
-  { type: 'desk', col: 2, row: 2, w: 3, h: 1, color: '#5a4a3a' },
-  { type: 'desk', col: 6, row: 2, w: 3, h: 1, color: '#5a4a3a' },
-  // Table - left room
-  { type: 'table', col: 4, row: 6, w: 3, h: 1, color: '#6a5a4a' },
-  // Desks - right room (RM + Top Bot)
-  { type: 'desk', col: 13, row: 3, w: 3, h: 1, color: '#3a4a5a' },
-  { type: 'desk', col: 13, row: 7, w: 3, h: 1, color: '#3a4a5a' },
-  // Whiteboard
-  { type: 'whiteboard', col: 12, row: 0, w: 2, h: 1, color: '#eee' },
-  // Plants
-  { type: 'plant', col: 18, row: 1, w: 1, h: 1, color: '#3a8a3a' },
-  { type: 'plant', col: 1, row: 8, w: 1, h: 1, color: '#3a8a3a' },
-  // Bookshelf
-  { type: 'bookshelf', col: 2, row: 0, w: 2, h: 1, color: '#5a3a2a' },
-  { type: 'bookshelf', col: 7, row: 0, w: 2, h: 1, color: '#5a3a2a' },
-];
-
-// Character sprites
-const charImages = [];
-let charsLoaded = 0;
-
-for (let i = 0; i < 6; i++) {
-  const img = new Image();
-  img.src = `assets/characters/char_${i}.png`;
-  img.onload = () => { charsLoaded++; };
-  charImages.push(img);
+// ── Sprite loading ────────────────────────────────────────────────────
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null); // graceful fallback
+    img.src = src;
+  });
 }
 
-// Animation state
-let frameCount = 0;
-const ANIM_SPEED = 12; // frames per animation step
+// All sprites loaded into this registry before first render
+const SPR = {};
 
-// ── Drawing ──────────────────────────────────────────────────────────
+async function loadAllSprites() {
+  const toLoad = {
+    // Floors
+    floor_0: 'assets/floors/floor_0.png',
+    floor_1: 'assets/floors/floor_1.png',
+    floor_7: 'assets/floors/floor_7.png',
+    floor_9: 'assets/floors/floor_8.png', // floor_8 has a nice dark look
+    wall_0:  'assets/floors/wall_0.png',
+    // Desk
+    desk_front: 'assets/furniture/DESK/DESK_FRONT.png',
+    desk_side:  'assets/furniture/DESK/DESK_SIDE.png',
+    // PC
+    pc_off:  'assets/furniture/PC/PC_FRONT_OFF.png',
+    pc_on_1: 'assets/furniture/PC/PC_FRONT_ON_1.png',
+    pc_on_2: 'assets/furniture/PC/PC_FRONT_ON_2.png',
+    pc_on_3: 'assets/furniture/PC/PC_FRONT_ON_3.png',
+    // Chair
+    chair_front: 'assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_FRONT.png',
+    chair_side:  'assets/furniture/WOODEN_CHAIR/WOODEN_CHAIR_SIDE.png',
+    // Decor
+    bookshelf:   'assets/furniture/BOOKSHELF/BOOKSHELF.png',
+    plant:       'assets/furniture/PLANT/PLANT.png',
+    large_plant: 'assets/furniture/LARGE_PLANT/LARGE_PLANT.png',
+    whiteboard:  'assets/furniture/WHITEBOARD/WHITEBOARD.png',
+    clock:       'assets/furniture/CLOCK/CLOCK.png',
+    coffee:      'assets/furniture/COFFEE/COFFEE.png',
+    bin:         'assets/furniture/BIN/BIN.png',
+  };
 
+  await Promise.all(
+    Object.entries(toLoad).map(async ([key, src]) => {
+      SPR[key] = await loadImage(src);
+    })
+  );
+
+  // Characters
+  SPR.chars = [];
+  for (let i = 0; i < 6; i++) {
+    SPR.chars[i] = await loadImage(`assets/characters/char_${i}.png`);
+  }
+}
+
+// ── Sprite draw helpers ───────────────────────────────────────────────
+// Draw a sprite scaled to ZOOM, anchored at tile col/row (top-left pixel)
+// ox/oy = pixel offsets within that tile position
+function spr(img, col, row, ox = 0, oy = 0, dw = null, dh = null) {
+  if (!img) return;
+  const x = col * T + ox;
+  const y = row * T + oy;
+  const w = dw !== null ? dw : img.naturalWidth * ZOOM;
+  const h = dh !== null ? dh : img.naturalHeight * ZOOM;
+  ctx.drawImage(img, x, y, w, h);
+}
+
+// Draw a floor tile (16x16 source) into a single tile cell
+function floorTile(img, col, row) {
+  if (!img) return;
+  ctx.drawImage(img, 0, 0, 16, 16, col * T, row * T, T, T);
+}
+
+// ── Floor rendering ───────────────────────────────────────────────────
 function drawFloor() {
+  const tileMap = {
+    0:   SPR.wall_0,
+    1:   SPR.floor_1,
+    7:   SPR.floor_7,
+    9:   SPR.floor_9,
+    255: null,
+  };
+
+  const fallbackColors = {
+    0:   '#2a2a3a',
+    1:   '#3a4a5a',
+    7:   '#4a3a2a',
+    9:   '#333340',
+    255: '#0a0a14',
+  };
+
   for (let r = 0; r < ROWS; r++) {
     for (let c = 0; c < COLS; c++) {
-      const tile = OFFICE_TILES[r][c];
-      const color = FLOOR_COLORS[tile] || FLOOR_COLORS[255];
-      ctx.fillStyle = color;
-      ctx.fillRect(c * TILE * ZOOM, r * TILE * ZOOM, TILE * ZOOM, TILE * ZOOM);
+      const tileId = OFFICE_TILES[r][c];
 
-      // Subtle grid lines for floor tiles
-      if (tile !== 255 && tile !== 0) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-        ctx.strokeRect(c * TILE * ZOOM, r * TILE * ZOOM, TILE * ZOOM, TILE * ZOOM);
+      // Void: just dark
+      if (tileId === 255) {
+        ctx.fillStyle = '#0a0a14';
+        ctx.fillRect(c * T, r * T, T, T);
+        continue;
       }
-    }
-  }
 
-  // Wall top border accent
-  ctx.fillStyle = '#00CCFF';
-  ctx.fillRect(0, 0, COLS * TILE * ZOOM, 2);
-}
-
-function drawFurniture() {
-  for (const f of FURNITURE) {
-    const x = f.col * TILE * ZOOM;
-    const y = f.row * TILE * ZOOM;
-    const w = f.w * TILE * ZOOM;
-    const h = f.h * TILE * ZOOM;
-
-    if (f.type === 'desk') {
-      // Desk body
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x, y, w, h);
-      // Desk top highlight
-      ctx.fillStyle = 'rgba(255,255,255,0.1)';
-      ctx.fillRect(x, y, w, 2);
-      // Monitor
-      const mx = x + w / 2 - 4 * ZOOM;
-      ctx.fillStyle = '#1a1a2e';
-      ctx.fillRect(mx, y - 6 * ZOOM, 8 * ZOOM, 5 * ZOOM);
-      // Screen glow
-      const agentAtDesk = AGENTS.find(a => a.desk.col >= f.col && a.desk.col < f.col + f.w && Math.abs(a.desk.row - f.row) <= 1);
-      const agentState = agentAtDesk ? state.agents[agentAtDesk.key] : null;
-      if (agentState && agentState.status === 'active') {
-        ctx.fillStyle = agentAtDesk.color + '80';
-        ctx.fillRect(mx + 1, y - 5 * ZOOM, 8 * ZOOM - 2, 4 * ZOOM - 1);
+      const img = tileMap[tileId];
+      if (img) {
+        // Tile the 16x16 PNG across the 32x32 zoomed cell
+        ctx.drawImage(img, 0, 0, 16, 16, c * T, r * T, T, T);
       } else {
-        ctx.fillStyle = '#333';
-        ctx.fillRect(mx + 1, y - 5 * ZOOM, 8 * ZOOM - 2, 4 * ZOOM - 1);
-      }
-    } else if (f.type === 'table') {
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x, y, w, h);
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
-      ctx.fillRect(x, y, w, 2);
-    } else if (f.type === 'whiteboard') {
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x, y + 2, w, h - 2);
-      ctx.fillStyle = '#999';
-      ctx.fillRect(x, y, w, 2);
-      // "LPU" text on whiteboard
-      ctx.fillStyle = '#00CCFF';
-      ctx.font = `${8 * ZOOM}px PixelSans, monospace`;
-      ctx.fillText('LPU', x + 4, y + h - 2);
-    } else if (f.type === 'plant') {
-      // Pot
-      ctx.fillStyle = '#8a5a3a';
-      ctx.fillRect(x + 4 * ZOOM, y + 8 * ZOOM, 8 * ZOOM, 6 * ZOOM);
-      // Leaves
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x + 2 * ZOOM, y, 12 * ZOOM, 10 * ZOOM);
-      ctx.fillStyle = '#2a7a2a';
-      ctx.fillRect(x + 4 * ZOOM, y + 2 * ZOOM, 8 * ZOOM, 6 * ZOOM);
-    } else if (f.type === 'bookshelf') {
-      ctx.fillStyle = f.color;
-      ctx.fillRect(x, y, w, h);
-      // Books
-      const bookColors = ['#c44', '#48c', '#4a4', '#cc4', '#a4c'];
-      for (let b = 0; b < 5; b++) {
-        ctx.fillStyle = bookColors[b];
-        ctx.fillRect(x + (b * 6 + 2) * ZOOM, y + 2 * ZOOM, 4 * ZOOM, h - 4 * ZOOM);
+        // Fallback solid color if sprite not loaded
+        ctx.fillStyle = fallbackColors[tileId] || '#0a0a14';
+        ctx.fillRect(c * T, r * T, T, T);
       }
     }
   }
+
+  // Top border accent line
+  ctx.fillStyle = '#00CCFF';
+  ctx.fillRect(0, 0, COLS * T, 2);
 }
 
-function drawCharacter(agent, index) {
-  const charImg = charImages[agent.char];
-  if (!charImg || !charImg.complete) return;
+// ── Static decorative furniture ────────────────────────────────────────
+// Positions are in tile coordinates (col, row = top-left anchor of the sprite)
+// Sprites with height > 1 tile overhang upward (pixel art isometric convention)
+
+function drawDecor() {
+  // ---- Left room (warm wood) ----
+
+  // Bookshelves along top wall (row 0, wall tiles)
+  // BOOKSHELF is 32x16 source (2 tiles wide, 1 tile tall visually)
+  spr(SPR.bookshelf, 2, 0);  // col 2-3
+  spr(SPR.bookshelf, 5, 0);  // col 5-6
+
+  // Clock on top wall
+  // CLOCK is 16x32 source -- hangs down from wall row
+  spr(SPR.clock, 8, 0);
+
+  // Large plant in corner (bottom-left of left room)
+  // LARGE_PLANT is 32x48 source (2w x 3h tiles) -- anchor bottom-left
+  spr(SPR.large_plant, 1, 8, 0, -T); // row 8, overhang up 1 tile
+
+  // Small plant near entrance
+  spr(SPR.plant, 8, 7, 0, -T);
+
+  // Bin near wall exit
+  // BIN is 16x16 source
+  spr(SPR.bin, 1, 10);
+
+  // ---- Right room (blue-gray) ----
+
+  // Whiteboard on top wall
+  // WHITEBOARD is 32x32 source (2w x 2h)
+  spr(SPR.whiteboard, 13, 0, 0, -T);
+
+  // Plant in top-right corner
+  spr(SPR.plant, 18, 1, 0, -T);
+
+  // Large plant bottom-right corner
+  spr(SPR.large_plant, 17, 7, 0, -T);
+
+  // ---- Break room (bottom-right) ----
+
+  // Coffee mugs on a table in break room (row 9-10)
+  spr(SPR.coffee, 14, 9);
+  spr(SPR.coffee, 15, 9);
+
+  // Bin in break room corner
+  spr(SPR.bin, 18, 10);
+}
+
+// ── Agent desks + PC + chairs ─────────────────────────────────────────
+// DESK_FRONT: 48x32 source (3 tiles wide, 2 tiles tall)
+//   Drawn so the desk top surface aligns with `row`, overhangs into row+1
+// WOODEN_CHAIR_FRONT: 16x32 source (1w x 2h)
+//   Chair sits in front of the desk (row+2), centered under the middle tile
+// PC_FRONT: 16x32 source (1w x 2h)
+//   Sits on top of the desk surface (row-1 visually), centered
+
+function getPCSprite(agentKey) {
+  const s = state.agents[agentKey];
+  if (!s || s.status !== 'active') return SPR.pc_off;
+  const step = Math.floor(frameCount / (ANIM_SPEED * 2)) % 3;
+  return [SPR.pc_on_1, SPR.pc_on_2, SPR.pc_on_3][step];
+}
+
+function drawDeskUnit(agent) {
+  const { col, row } = agent.desk;
+
+  // DESK_FRONT: 48px wide, 32px tall source
+  // Render at 2x: 96px wide (3 tiles), 64px tall (2 tiles)
+  // Position: top-left = (col, row), overhangs down to row+1
+  spr(SPR.desk_front, col, row);
+
+  // PC: centered on middle tile of desk top
+  // PC is 16x32 source -> 32x64 at 2x
+  // We want it sitting ON the desk surface which is at row, so offset up by PC height
+  const pcX = (col + 1) * T;          // middle tile of 3-tile desk
+  const pcY = row * T - 32 * ZOOM;    // above the desk top edge (32px source * 2)
+  // Actually: desk top is at row*T, PC should sit on that surface
+  // PC_FRONT is 16x32: top 16px is screen, bottom 16px is base on desk
+  // Place base at desk top row: y = row*T - 16*ZOOM (so base aligns with desk surface)
+  const pcImg = getPCSprite(agent.key);
+  if (pcImg) {
+    ctx.drawImage(pcImg, pcX, row * T - 16 * ZOOM, 16 * ZOOM, 32 * ZOOM);
+  }
+
+  // Chair: WOODEN_CHAIR_FRONT is 16x32 source -> 32x64 at 2x
+  // Place in front of desk, centered under middle desk tile
+  // Chair top = row+2 tile minus chair height
+  const chairX = (col + 1) * T;
+  // Chair sits at row+2, visually overhangs up, so anchor its top at row+1
+  spr(SPR.chair_front, col + 1, row + 2, 0, -T);
+}
+
+// ── Characters ───────────────────────────────────────────────────────
+function drawCharacter(agent) {
+  const charImg = SPR.chars[agent.char];
+  if (!charImg) return;
 
   const agentState = state.agents[agent.key];
   const isActive = agentState && agentState.status === 'active';
   const hasError = agentState && agentState.errors > 0;
 
-  // Animation frame
+  // Sprite sheet: 7 frames x 4 directions
+  // Direction 0 = down (facing toward viewer)
+  // Active: cycle frames 1-4 (typing); idle: frame 0
   const animFrame = isActive
-    ? Math.floor(frameCount / ANIM_SPEED) % 4 + 1  // typing animation (frames 1-4)
-    : 0;  // idle (frame 0)
+    ? (Math.floor(frameCount / ANIM_SPEED) % 4) + 1
+    : 0;
 
-  // Direction: 0=down (facing screen)
-  const dir = 0;
-
-  // Source rect from sprite sheet
   const sx = animFrame * SPRITE_W;
-  const sy = dir * SPRITE_H;
+  const sy = 0; // direction 0 = down
 
-  // Destination: at the agent's desk, offset to sit in front
-  const dx = agent.desk.col * TILE * ZOOM;
-  const dy = (agent.desk.row + 1) * TILE * ZOOM - SPRITE_H * ZOOM;
+  // Character sits in front of the desk (row+2 area), centered on middle desk tile
+  // Character is 16x24 source -> 32x48 at 2x
+  const { col, row } = agent.desk;
+  const cx = (col + 1) * T; // middle tile x
+  // Place character so feet land at row+3 tile top
+  const cy = (row + 3) * T - SPRITE_H * ZOOM;
 
-  // Draw character
   ctx.drawImage(
     charImg,
     sx, sy, SPRITE_W, SPRITE_H,
-    dx, dy, SPRITE_W * ZOOM, SPRITE_H * ZOOM
+    cx, cy, SPRITE_W * ZOOM, SPRITE_H * ZOOM
   );
 
-  // Name tag below
+  // Name tag
   ctx.fillStyle = agent.color;
-  ctx.font = `${6 * ZOOM}px PixelSans, monospace`;
+  ctx.font = `bold ${6 * ZOOM}px PixelSans, monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText(agent.short, dx + SPRITE_W * ZOOM / 2, dy + SPRITE_H * ZOOM + 8 * ZOOM);
+  ctx.fillText(agent.short, cx + (SPRITE_W * ZOOM) / 2, cy + SPRITE_H * ZOOM + 7 * ZOOM);
   ctx.textAlign = 'left';
 
-  // Status indicator dot
-  const dotX = dx + SPRITE_W * ZOOM + 2;
-  const dotY = dy + 4;
+  // Status dot (top-right of sprite)
+  const dotX = cx + SPRITE_W * ZOOM + 3;
+  const dotY = cy + 5;
   ctx.beginPath();
   ctx.arc(dotX, dotY, 3 * ZOOM, 0, Math.PI * 2);
-  if (hasError) {
-    ctx.fillStyle = '#ff4444';
-  } else if (isActive) {
-    ctx.fillStyle = '#5ac88c';
-  } else {
-    ctx.fillStyle = '#555';
-  }
+  ctx.fillStyle = hasError ? '#ff4444' : isActive ? '#5ac88c' : '#444';
   ctx.fill();
 
-  // Store hitbox for tooltip
-  agent._hitbox = { x: dx, y: dy, w: SPRITE_W * ZOOM, h: SPRITE_H * ZOOM };
+  // Hitbox for tooltip
+  agent._hitbox = { x: cx, y: cy, w: SPRITE_W * ZOOM, h: SPRITE_H * ZOOM };
 }
+
+// ── Render loop ───────────────────────────────────────────────────────
+let frameCount = 0;
 
 function render() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 1. Floor
   drawFloor();
-  drawFurniture();
-  for (let i = 0; i < AGENTS.length; i++) {
-    drawCharacter(AGENTS[i], i);
+
+  // 2. Static decor (bookshelves, plants, whiteboard, etc.)
+  drawDecor();
+
+  // 3. Desks + PCs + chairs (back-to-front: lower rows last so they render on top)
+  // Sort by row so agents deeper in scene render first
+  const sorted = [...AGENTS].sort((a, b) => a.desk.row - b.desk.row);
+  for (const agent of sorted) {
+    drawDeskUnit(agent);
   }
+
+  // 4. Characters (always in front of desks)
+  for (const agent of sorted) {
+    drawCharacter(agent);
+  }
+
   frameCount++;
   requestAnimationFrame(render);
 }
 
-// ── Tooltip ──────────────────────────────────────────────────────────
-
+// ── Tooltip ───────────────────────────────────────────────────────────
 const tooltipEl = document.getElementById('tooltip');
 
 canvas.addEventListener('mousemove', (e) => {
   const rect = canvas.getBoundingClientRect();
-  const mx = e.clientX - rect.left;
-  const my = e.clientY - rect.top;
+  // Account for CSS scaling if canvas is scaled by the browser
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
 
   let found = null;
   for (const a of AGENTS) {
@@ -556,14 +741,15 @@ canvas.addEventListener('mousemove', (e) => {
 
   if (found) {
     const s = state.agents[found.key] || {};
+    const errText = s.errors > 0 ? ` (${s.errors} errors)` : '';
     tooltipEl.innerHTML = `
       <div class="tt-name">${found.name}</div>
-      <div class="tt-status">${s.status || 'unknown'} ${s.errors > 0 ? '(' + s.errors + ' errors)' : ''}</div>
+      <div class="tt-status">${s.status || 'unknown'}${errText}</div>
       <div class="tt-detail">${s.detail || 'No data yet'}</div>
     `;
     tooltipEl.style.display = 'block';
-    tooltipEl.style.left = (e.clientX + 12) + 'px';
-    tooltipEl.style.top = (e.clientY - 40) + 'px';
+    tooltipEl.style.left = (e.clientX + 14) + 'px';
+    tooltipEl.style.top  = (e.clientY - 44) + 'px';
   } else {
     tooltipEl.style.display = 'none';
   }
@@ -573,8 +759,7 @@ canvas.addEventListener('mouseleave', () => {
   tooltipEl.style.display = 'none';
 });
 
-// ── Data Fetching ────────────────────────────────────────────────────
-
+// ── Data fetching ─────────────────────────────────────────────────────
 async function fetchJSON(path, body) {
   try {
     const res = await fetch(`${BACKEND}${path}`, {
@@ -587,7 +772,7 @@ async function fetchJSON(path, body) {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     return await res.json();
-  } catch (err) {
+  } catch (_) {
     return null;
   }
 }
@@ -617,7 +802,6 @@ async function refreshAgentStatuses() {
         toolCalls: data.tool_call_count_in_window || 0,
         detail: data.detail || '',
       };
-      // Log state changes
       if (prev && prev.status !== state.agents[agent.key].status) {
         addActivity(agent.short, `status changed to ${state.agents[agent.key].status}`);
       }
@@ -646,29 +830,34 @@ async function refreshPipelineHealth() {
   }
 }
 
-// ── Sidebar Rendering ────────────────────────────────────────────────
-
+// ── Sidebar rendering ─────────────────────────────────────────────────
 function renderAgentList() {
   const el = document.getElementById('agentList');
   el.innerHTML = AGENTS.map(a => {
     const s = state.agents[a.key] || {};
-    const dotClass = s.errors > 0 ? 'red' : s.status === 'active' ? 'green' : s.status === 'idle' ? 'yellow' : 'gray';
+    const dotClass = s.errors > 0
+      ? 'red'
+      : s.status === 'active'
+      ? 'green'
+      : s.status === 'idle'
+      ? 'yellow'
+      : 'gray';
     const statusText = s.status === 'active'
       ? `${s.sessions} sessions, ${s.toolCalls} calls`
       : s.status === 'idle'
       ? 'Idle'
       : 'Offline';
+    const displayName = a.name.includes(': ') ? a.name.split(': ')[1] : a.name;
     return `
       <div class="agent-row">
         <span class="dot ${dotClass}"></span>
-        <span class="name" style="color: ${a.color}">${a.short}</span>
-        <span class="name" style="margin-left: 4px">${a.name.split(': ')[1] || a.name}</span>
+        <span class="name" style="color: ${a.color}; flex: 0 0 auto; margin-right: 4px;">${a.short}</span>
+        <span class="name">${displayName}</span>
         <span class="status-text">${statusText}</span>
       </div>
     `;
   }).join('');
 
-  // Update global dot
   const dot = document.getElementById('globalDot');
   const hasErrors = AGENTS.some(a => (state.agents[a.key] || {}).errors > 0);
   dot.className = 'status-dot' + (hasErrors ? ' error' : state.connected ? '' : ' loading');
@@ -721,8 +910,6 @@ function renderPipelineHealth(summary) {
   `;
 }
 
-// ── Refresh Info ─────────────────────────────────────────────────────
-
 function updateRefreshInfo() {
   const el = document.getElementById('refreshInfo');
   if (!state.lastRefresh) {
@@ -730,15 +917,10 @@ function updateRefreshInfo() {
     return;
   }
   const ago = Math.floor((Date.now() - state.lastRefresh) / 1000);
-  if (ago < 60) {
-    el.textContent = `Updated ${ago}s ago`;
-  } else {
-    el.textContent = `Updated ${Math.floor(ago / 60)}m ago`;
-  }
+  el.textContent = ago < 60 ? `Updated ${ago}s ago` : `Updated ${Math.floor(ago / 60)}m ago`;
 }
 
-// ── Main Loop ────────────────────────────────────────────────────────
-
+// ── Main loop ─────────────────────────────────────────────────────────
 async function pollData() {
   try {
     await refreshAgentStatuses();
@@ -751,14 +933,96 @@ async function pollData() {
   }
 }
 
-// Initial render
-render();
-renderAgentList();
+// ── Top Bot Chat ─────────────────────────────────────────────────────
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+let chatHistory = [];
 
-// Initial fetch + 60s polling
-pollData();
-setInterval(pollData, 60000);
-setInterval(updateRefreshInfo, 5000);
+function appendChatMessage(sender, text, color) {
+  const div = document.createElement('div');
+  div.style.marginBottom = '6px';
+  div.style.lineHeight = '1.4';
+  const tag = document.createElement('span');
+  tag.style.color = color;
+  tag.style.fontWeight = 'bold';
+  tag.textContent = sender + ': ';
+  const msg = document.createElement('span');
+  msg.style.color = '#ccc';
+  msg.textContent = text;
+  div.appendChild(tag);
+  div.appendChild(msg);
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  chatHistory.push({ sender, text });
+}
+
+async function sendChat() {
+  const message = chatInput.value.trim();
+  if (!message || !AUTH) return;
+  chatInput.value = '';
+
+  // Clear placeholder on first message
+  if (chatHistory.length === 0) {
+    chatMessages.innerHTML = '';
+  }
+
+  appendChatMessage('You', message, '#00CCFF');
+
+  // Show typing indicator
+  const typing = document.createElement('div');
+  typing.style.color = '#555';
+  typing.style.fontStyle = 'italic';
+  typing.textContent = 'Top Bot is thinking...';
+  chatMessages.appendChild(typing);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  addActivity('TB', 'Chat session started');
+
+  try {
+    const res = await fetch(`${BACKEND}/topbot/tools/chat`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': AUTH,
+      },
+      body: JSON.stringify({ message }),
+    });
+
+    chatMessages.removeChild(typing);
+
+    if (!res.ok) {
+      appendChatMessage('System', `Error: HTTP ${res.status}`, '#ff4444');
+      return;
+    }
+
+    const data = await res.json();
+
+    if (data.status === 'ok' && data.response) {
+      appendChatMessage('Top Bot', data.response, '#ff6b6b');
+      if (data.tool_calls > 0) {
+        addActivity('TB', `Chat: ${data.tool_calls} tool calls, session ${data.session_id}`);
+      }
+      // Refresh agent statuses since a session just ran
+      refreshAgentStatuses();
+    } else if (data.status === 'error') {
+      appendChatMessage('Top Bot', data.response || 'Session failed', '#ff4444');
+    } else {
+      appendChatMessage('Top Bot', data.response || 'No response', '#888');
+    }
+  } catch (err) {
+    if (typing.parentNode) chatMessages.removeChild(typing);
+    appendChatMessage('System', `Network error: ${err.message}`, '#ff4444');
+  }
+}
+
+// Boot: load all sprites first, then start render loop and data polling
+loadAllSprites().then(() => {
+  render();
+  renderAgentList();
+  pollData();
+  setInterval(pollData, 60000);
+  setInterval(updateRefreshInfo, 5000);
+});
 </script>
 
 </body>
