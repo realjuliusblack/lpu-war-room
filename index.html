@@ -4,39 +4,85 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LPU War Room</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 @font-face {
   font-family: 'PixelSans';
   src: url('assets/fonts/FSPixelSansUnicode-Regular.ttf') format('truetype');
 }
 
+:root {
+  --cyan: #00CCFF;
+  --cyan-10: rgba(0,204,255,0.10);
+  --cyan-15: rgba(0,204,255,0.15);
+  --cyan-25: rgba(0,204,255,0.25);
+  --cyan-40: rgba(0,204,255,0.40);
+  --cyan-60: rgba(0,204,255,0.60);
+  --bg: #0a0b10;
+  --bg-2: #0c0d12;
+  --surface: #141520;
+  --surface-2: #1c1d28;
+  --surface-3: #24253a;
+  --border: rgba(255,255,255,0.08);
+  --border-cyan: rgba(0,204,255,0.2);
+  --t1: #ffffff;
+  --t2: rgba(255,255,255,0.92);
+  --t3: rgba(255,255,255,0.78);
+  --green: #34D399;
+  --yellow: #FBBF24;
+  --red: #F87171;
+  --radius: 16px;
+  --radius-sm: 10px;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
-  background: #0a0a14;
-  color: #e0e0e0;
-  font-family: 'PixelSans', 'Courier New', monospace;
+  background: var(--bg);
+  color: var(--t1);
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+  font-weight: 400;
   overflow: hidden;
   height: 100vh;
   display: flex;
   flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,204,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,204,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  pointer-events: none;
+  z-index: 0;
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 16px;
-  background: #12121e;
-  border-bottom: 2px solid #00CCFF;
+  padding: 10px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-cyan);
   flex-shrink: 0;
-  height: 36px;
+  height: 48px;
+  position: relative;
+  z-index: 1;
 }
 
 .header h1 {
-  font-size: 16px;
-  color: #00CCFF;
-  letter-spacing: 2px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--cyan);
+  letter-spacing: 3px;
   text-transform: uppercase;
 }
 
@@ -59,14 +105,18 @@ body {
 }
 
 .header .refresh-info {
-  font-size: 11px;
-  color: #666;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--t3);
+  letter-spacing: 0.5px;
 }
 
 .main {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
+  z-index: 1;
 }
 
 .canvas-wrap {
@@ -89,148 +139,164 @@ canvas {
 
 .sidebar {
   width: 440px;
-  background: #12121e;
-  border-left: 2px solid #1e1e2e;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   overflow-y: auto;
   flex-shrink: 0;
-  padding: 16px;
+  padding: 20px;
 }
 
 .panel {
-  background: #1a1a2e;
-  border: 1px solid #2a2a4a;
-  border-radius: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
   margin-bottom: 16px;
-  padding: 16px;
+  padding: 18px;
 }
 
 .panel h3 {
-  font-size: 20px;
-  color: #00CCFF;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cyan);
   text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid #2a2a4a;
-  padding-bottom: 8px;
+  letter-spacing: 2.5px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
 .agent-row {
   display: flex;
   align-items: center;
-  padding: 8px 6px;
-  border-bottom: 1px solid #1e1e2e;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
   cursor: pointer;
   transition: background 0.15s;
 }
 
-.agent-row:hover { background: #ffffff08; }
+.agent-row:hover { background: var(--cyan-10); }
 .agent-row:last-child { border-bottom: none; }
 
 .agent-row .dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 10px;
+  margin-right: 12px;
   flex-shrink: 0;
+  box-shadow: 0 0 8px currentColor;
 }
 
-.agent-row .dot.green { background: #5ac88c; }
-.agent-row .dot.yellow { background: #f59e0b; }
-.agent-row .dot.red { background: #ff4444; }
-.agent-row .dot.gray { background: #555; }
+.agent-row .dot.green { background: var(--green); color: var(--green); }
+.agent-row .dot.yellow { background: var(--yellow); color: var(--yellow); }
+.agent-row .dot.red { background: var(--red); color: var(--red); }
+.agent-row .dot.gray { background: rgba(255,255,255,0.2); box-shadow: none; }
 
 .agent-row .name {
   flex: 1;
-  font-size: 18px;
-  color: #ccc;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--t2);
 }
 
 .agent-row .status-text {
-  font-size: 16px;
-  color: #888;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--t3);
 }
 
 .kpi-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
+  gap: 10px;
 }
 
 .kpi-box {
-  background: #0a0a14;
-  border: 1px solid #2a2a4a;
-  border-radius: 3px;
-  padding: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 14px;
   text-align: center;
 }
 
 .kpi-box .value {
-  font-size: 32px;
-  color: #00CCFF;
-  font-weight: bold;
+  font-size: 36px;
+  font-weight: 800;
+  color: var(--cyan);
+  line-height: 1.1;
 }
 
 .kpi-box .label {
-  font-size: 14px;
-  color: #666;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--t3);
   text-transform: uppercase;
-  margin-top: 4px;
+  letter-spacing: 1.5px;
+  margin-top: 6px;
 }
 
 .activity-log {
-  max-height: 200px;
+  max-height: 220px;
   overflow-y: auto;
 }
 
 .activity-log .entry {
-  font-size: 16px;
-  padding: 6px 0;
-  border-bottom: 1px solid #1e1e2e;
-  color: #999;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--t3);
 }
 
+.activity-log .entry:last-child { border-bottom: none; }
+
 .activity-log .entry .time {
-  color: #555;
-  margin-right: 6px;
+  color: rgba(255,255,255,0.4);
+  margin-right: 8px;
+  font-variant-numeric: tabular-nums;
 }
 
 .activity-log .entry .agent-tag {
-  color: #00CCFF;
-  margin-right: 6px;
+  color: var(--cyan);
+  font-weight: 600;
+  margin-right: 8px;
 }
 
 .tooltip {
   position: fixed;
-  background: #1a1a2e;
-  border: 2px solid #00CCFF;
-  border-radius: 6px;
-  padding: 14px 18px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-cyan);
+  border-radius: var(--radius-sm);
+  padding: 16px 20px;
   font-size: 14px;
-  color: #e0e0e0;
+  color: var(--t2);
   pointer-events: none;
   z-index: 100;
   display: none;
-  box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-  max-width: 400px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px var(--cyan-15);
+  max-width: 380px;
+  backdrop-filter: blur(10px);
 }
 
 .tooltip .tt-name {
-  color: #00CCFF;
-  font-size: 22px;
-  margin-bottom: 6px;
-  font-weight: bold;
+  color: var(--cyan);
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  letter-spacing: 0.5px;
 }
 
 .tooltip .tt-status {
-  color: #5ac88c;
-  font-size: 17px;
+  color: var(--green);
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .tooltip .tt-detail {
-  color: #aaa;
-  font-size: 15px;
+  color: var(--t3);
+  font-size: 13px;
+  font-weight: 400;
   margin-top: 6px;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 @media (max-width: 900px) {
@@ -288,54 +354,67 @@ canvas {
 
 <!-- Floating Top Bot chat window -->
 <div id="chatFloat" style="
-  position: fixed; bottom: 20px; right: 20px; width: 550px; z-index: 50;
-  font-family: 'PixelSans', monospace;
+  position: fixed; bottom: 24px; right: 24px; width: 560px; z-index: 50;
+  font-family: 'Outfit', system-ui, sans-serif;
 ">
   <!-- Collapsed tab -->
   <div id="chatTab" onclick="toggleChat()" style="
-    background: #12121e; border: 1px solid #00CCFF; border-radius: 8px;
-    padding: 10px 18px; cursor: pointer; display: flex; align-items: center; gap: 10px;
-    user-select: none;
-  ">
-    <span style="color: #ff6b6b; font-size: 22px; font-weight: bold;">TB</span>
-    <span style="color: #e0e0e0; font-size: 22px;">Top Bot</span>
-    <span id="chatDot" style="width: 8px; height: 8px; border-radius: 50%; background: #5ac88c; margin-left: auto;"></span>
+    background: var(--surface); border: 1px solid var(--border-cyan);
+    border-radius: var(--radius-sm);
+    padding: 14px 22px; cursor: pointer; display: flex; align-items: center; gap: 14px;
+    user-select: none; box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    transition: border-color 0.2s;
+  " onmouseover="this.style.borderColor='var(--cyan)'" onmouseout="this.style.borderColor='var(--border-cyan)'">
+    <span style="color: var(--cyan); font-size: 14px; font-weight: 700; letter-spacing: 2px;">TOP BOT</span>
+    <span id="chatDot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); margin-left: auto; box-shadow: 0 0 8px var(--green);"></span>
   </div>
 
   <!-- Expanded window -->
   <div id="chatWindow" style="
-    display: none; background: #12121e; border: 1px solid #00CCFF; border-radius: 8px;
-    overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    display: none; background: var(--surface);
+    border: 1px solid var(--border-cyan);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--cyan-15);
   ">
     <!-- Title bar (draggable) -->
     <div id="chatTitleBar" style="
-      background: #1a1a2e; padding: 10px 14px; cursor: move; display: flex;
-      align-items: center; justify-content: space-between; border-bottom: 1px solid #2a2a4a;
+      background: var(--surface-2); padding: 14px 20px; cursor: move; display: flex;
+      align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border);
       user-select: none;
     ">
-      <span style="color: #00CCFF; font-size: 24px; font-weight: bold; letter-spacing: 1px;">TOP BOT</span>
-      <span onclick="toggleChat()" style="color: #666; font-size: 28px; cursor: pointer; line-height: 1;">&times;</span>
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green);"></span>
+        <span style="color: var(--cyan); font-size: 13px; font-weight: 700; letter-spacing: 2.5px;">TOP BOT</span>
+      </div>
+      <span onclick="toggleChat()" style="color: var(--t3); font-size: 22px; cursor: pointer; line-height: 1; font-weight: 300;">&times;</span>
     </div>
 
     <!-- Messages -->
     <div id="chatMessages" style="
-      height: 350px; overflow-y: auto; padding: 16px 18px;
-      font-size: 22px; color: #ccc; line-height: 1.6;
+      height: 380px; overflow-y: auto; padding: 20px 22px;
+      font-size: 15px; font-weight: 400; color: var(--t2); line-height: 1.6;
+      background: var(--bg-2);
     ">
-      <div style="color: #555; font-style: italic;">Send a message to Top Bot...</div>
+      <div style="color: var(--t3); font-style: italic; opacity: 0.6;">Send a message to Top Bot...</div>
     </div>
 
     <!-- Input -->
-    <div style="display: flex; gap: 6px; padding: 10px 14px; border-top: 1px solid #2a2a4a; background: #1a1a2e;">
+    <div style="display: flex; gap: 10px; padding: 16px 20px; border-top: 1px solid var(--border); background: var(--surface-2);">
       <input type="text" id="chatInput" placeholder="Talk to Top Bot..."
-        style="flex: 1; background: #0a0a14; border: 1px solid #2a2a4a; color: #e0e0e0;
-        padding: 12px 14px; font-family: 'PixelSans', monospace; font-size: 20px;
-        border-radius: 4px; outline: none;"
+        style="flex: 1; background: var(--bg); border: 1px solid var(--border); color: var(--t1);
+        padding: 12px 16px; font-family: 'Outfit', system-ui, sans-serif; font-size: 15px;
+        font-weight: 400; border-radius: var(--radius-sm); outline: none;
+        transition: border-color 0.2s;"
+        onfocus="this.style.borderColor='var(--cyan-40)'"
+        onblur="this.style.borderColor='var(--border)'"
         onkeydown="if(event.key==='Enter')sendChat()" />
       <button onclick="sendChat()"
-        style="background: #00CCFF; color: #0a0a14; border: none; padding: 12px 22px;
-        font-family: 'PixelSans', monospace; font-size: 20px; border-radius: 4px;
-        cursor: pointer; font-weight: bold;">
+        style="background: var(--cyan); color: var(--bg); border: none; padding: 12px 24px;
+        font-family: 'Outfit', system-ui, sans-serif; font-size: 14px;
+        font-weight: 700; letter-spacing: 1px; border-radius: var(--radius-sm);
+        cursor: pointer; text-transform: uppercase;">
         Send
       </button>
     </div>
@@ -380,13 +459,15 @@ function showAuthGate() {
   overlay.id = 'authOverlay';
   overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;';
   overlay.innerHTML = `
-    <div style="background:#12121f;border:1px solid #2a2a4a;border-radius:8px;padding:32px;max-width:400px;width:90%;text-align:center;">
-      <h2 style="color:#00CCFF;font-family:'PixelSans',monospace;margin:0 0 8px;">LPU War Room</h2>
-      <p style="color:#888;font-size:12px;margin:0 0 20px;">Enter your agent bearer token to connect.</p>
+    <div style="background:var(--surface);border:1px solid var(--border-cyan);border-radius:var(--radius);padding:40px;max-width:440px;width:90%;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--cyan-15);">
+      <h2 style="color:var(--cyan);font-family:'Outfit',system-ui,sans-serif;font-weight:800;letter-spacing:3px;font-size:22px;margin:0 0 10px;text-transform:uppercase;">LPU War Room</h2>
+      <p style="color:var(--t3);font-size:14px;margin:0 0 24px;">Enter your agent bearer token to connect.</p>
       <input type="password" id="authTokenInput" placeholder="sk-agent1-..."
-        style="width:100%;box-sizing:border-box;background:#0a0a14;border:1px solid #2a2a4a;color:#e0e0e0;padding:10px 12px;font-family:monospace;font-size:13px;border-radius:4px;outline:none;margin-bottom:16px;" />
+        style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--t1);padding:12px 14px;font-family:'Outfit',system-ui,sans-serif;font-size:14px;border-radius:var(--radius-sm);outline:none;margin-bottom:20px;transition:border-color 0.2s;"
+        onfocus="this.style.borderColor='var(--cyan-40)'"
+        onblur="this.style.borderColor='var(--border)'" />
       <button id="authSubmitBtn"
-        style="background:#00CCFF;color:#0a0a14;border:none;padding:10px 32px;font-family:'PixelSans',monospace;font-size:13px;border-radius:4px;cursor:pointer;font-weight:bold;">
+        style="background:var(--cyan);color:var(--bg);border:none;padding:12px 40px;font-family:'Outfit',system-ui,sans-serif;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:var(--radius-sm);cursor:pointer;">
         Connect
       </button>
     </div>`;
