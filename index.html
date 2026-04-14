@@ -1353,6 +1353,32 @@ function escapeHtml(s) {
 if (window.marked) {
   marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
 }
+// Parse [chip text] patterns that stand alone on a line (or separated by spaces)
+// and render them as clickable quick-reply chips. Returns { textSansChips, chips }.
+function extractChips(text) {
+  const lines = text.split('\n');
+  const chipLines = [];
+  const kept = [];
+  const chipPattern = /\[([^\[\]\n]{1,80})\]/g;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    // A "chip line" is one where content is entirely made of [..] chips and whitespace
+    const withoutChips = trimmed.replace(chipPattern, '').trim();
+    const hasChips = chipPattern.test(trimmed);
+    chipPattern.lastIndex = 0;
+    if (hasChips && withoutChips === '') {
+      let m;
+      while ((m = chipPattern.exec(trimmed)) !== null) {
+        chipLines.push(m[1].trim());
+      }
+      chipPattern.lastIndex = 0;
+    } else {
+      kept.push(line);
+    }
+  }
+  return { textSansChips: kept.join('\n').trim(), chips: chipLines };
+}
+
 function renderMarkdown(text) {
   if (!window.marked || !window.DOMPurify) {
     return escapeHtml(text).replace(/\n/g, '<br>');
@@ -1363,6 +1389,35 @@ function renderMarkdown(text) {
                    'h1', 'h2', 'h3', 'h4', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'hr'],
     ALLOWED_ATTR: ['href', 'target', 'rel'],
   });
+}
+
+function renderChips(container, chipTexts) {
+  if (!chipTexts || chipTexts.length === 0) return;
+  container.innerHTML = '';
+  container.style.display = 'flex';
+  container.style.flexWrap = 'wrap';
+  container.style.gap = '8px';
+  container.style.marginTop = '12px';
+  for (const text of chipTexts) {
+    const chip = document.createElement('button');
+    chip.textContent = text;
+    chip.style.cssText = `
+      background: rgba(0,204,255,0.08);
+      border: 1px solid rgba(0,204,255,0.35);
+      color: #00CCFF;
+      padding: 8px 14px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.15s;
+    `;
+    chip.onmouseover = () => { chip.style.background = 'rgba(0,204,255,0.18)'; chip.style.borderColor = '#00CCFF'; };
+    chip.onmouseout = () => { chip.style.background = 'rgba(0,204,255,0.08)'; chip.style.borderColor = 'rgba(0,204,255,0.35)'; };
+    chip.onclick = () => sendChat(text);
+    container.appendChild(chip);
+  }
 }
 
 // ── Conversation state ───────────────────────────────────────────────
@@ -1400,6 +1455,7 @@ function startAssistantMessage() {
       <div style="flex:1;min-width:0;">
         <div class="tool-cards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
         <div class="assistant-text markdown-body" style="color:rgba(255,255,255,0.92);line-height:1.6;"></div>
+        <div class="assistant-chips" style="display:none;"></div>
         <div class="msg-actions" style="display:none;gap:8px;margin-top:10px;opacity:0.6;font-size:12px;">
           <span style="cursor:pointer;" class="copy-btn">Copy</span>
           <span style="cursor:pointer;" class="regen-btn">Regenerate</span>
@@ -1414,6 +1470,7 @@ function startAssistantMessage() {
     wrap,
     toolCards: wrap.querySelector('.tool-cards'),
     textEl: wrap.querySelector('.assistant-text'),
+    chipsEl: wrap.querySelector('.assistant-chips'),
     actionsEl: wrap.querySelector('.msg-actions'),
     currentText: '',
   };
@@ -1549,8 +1606,11 @@ async function sendChat(messageOverride) {
         } else if (eventType === 'done') {
           if (data.final_text && !assistant.currentText.trim()) {
             assistant.currentText = data.final_text;
-            assistant.textEl.innerHTML = renderMarkdown(data.final_text);
           }
+          // Extract clickable chips from [chip text] patterns and re-render
+          const { textSansChips, chips } = extractChips(assistant.currentText);
+          assistant.textEl.innerHTML = renderMarkdown(textSansChips);
+          renderChips(assistant.chipsEl, chips);
           // Attach message actions
           if (data.assistant_message_id) {
             assistant.wrap.dataset.messageId = data.assistant_message_id;
