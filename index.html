@@ -495,9 +495,18 @@ const BACKEND = 'https://lpu-agent-backend.up.railway.app';
 // ── Auth: Supabase email + password ──────────────────────────────────
 const SUPABASE_URL = 'https://uwfzroqgccijhhrfytne.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3Znpyb3FnY2NpamhocmZ5dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4OTg0NTQsImV4cCI6MjA5MTQ3NDQ1NH0.FdANLpA7ILDcahCCVCRiYtisaH3p2laBXcB536C92UU';
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true },
-});
+
+// Wait for the Supabase UMD bundle to be available (CDN may still be loading).
+async function waitForSupabase(timeoutMs = 5000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (window.supabase && typeof window.supabase.createClient === 'function') return true;
+    await new Promise(r => setTimeout(r, 50));
+  }
+  return !!(window.supabase && window.supabase.createClient);
+}
+
+let sb = null;  // Lazy-initialized after CDN loads
 
 let AUTH = null;                  // "Bearer <jwt>" or null
 let CURRENT_USER = null;          // { id, email, user_id, tier, display_name }
@@ -674,15 +683,33 @@ function onAuthReady() {
   if (typeof pollData === 'function') pollData();
 }
 
-// Boot: handle recovery link, then check existing session, else show login.
+// Boot: wait for Supabase CDN, handle recovery link, then session check, else show login.
 (async () => {
-  const recoveryHandled = await handleRecoveryTokenFromUrl();
-  if (recoveryHandled) return;  // set-password form is showing
-  const user = await resolveCurrentUser();
-  if (!user) {
-    showLoginForm();
-  } else {
-    // Already signed in. Data polling kicks off after sprites load (see bottom).
+  try {
+    const ok = await waitForSupabase();
+    if (!ok) {
+      console.error('[War Room] Supabase CDN failed to load');
+      showLoginForm('Could not load auth. Check your connection and refresh.');
+      return;
+    }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true },
+    });
+    // Migration: clear any legacy bearer token from the old flow
+    localStorage.removeItem('lpu_war_room_token');
+
+    const recoveryHandled = await handleRecoveryTokenFromUrl();
+    if (recoveryHandled) return;
+
+    const user = await resolveCurrentUser();
+    if (!user) {
+      showLoginForm();
+    } else {
+      onAuthReady();
+    }
+  } catch (err) {
+    console.error('[War Room] boot error:', err);
+    showLoginForm('Unexpected error. Check the console and refresh.');
   }
 })();
 
@@ -1433,7 +1460,6 @@ function finalizeToolCard(card, summary, isError) {
 }
 
 // ── SSE chat send ────────────────────────────────────────────────────
-let chatHistory = [];
 let lastUserMessage = '';
 
 async function sendChat(messageOverride) {
