@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<!-- Markdown rendering + sanitizer -->
+<script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.8/dist/purify.min.js"></script>
+<!-- Supabase JS v2 for auth -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 @font-face {
   font-family: 'PixelSans';
@@ -63,6 +68,43 @@ body::before {
   background-size: 60px 60px;
   pointer-events: none;
   z-index: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Markdown body styling for chat responses */
+.markdown-body p { margin: 0 0 10px; }
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 10px; padding-left: 22px; }
+.markdown-body li { margin-bottom: 4px; }
+.markdown-body strong { color: #fff; font-weight: 600; }
+.markdown-body em { color: rgba(255,255,255,0.8); }
+.markdown-body code {
+  background: rgba(255,255,255,0.06); padding: 2px 6px;
+  border-radius: 4px; font-size: 13px;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+}
+.markdown-body pre {
+  background: rgba(0,0,0,0.3); padding: 12px;
+  border-radius: 8px; overflow-x: auto;
+  font-family: 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 13px; margin-bottom: 10px;
+}
+.markdown-body table {
+  border-collapse: collapse; width: 100%;
+  margin: 10px 0; font-size: 13px;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid rgba(255,255,255,0.1); padding: 6px 10px; text-align: left;
+}
+.markdown-body th { background: rgba(0,204,255,0.06); font-weight: 600; color: #fff; }
+.markdown-body a { color: #00CCFF; text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body blockquote {
+  border-left: 3px solid rgba(0,204,255,0.4); padding-left: 12px;
+  color: rgba(255,255,255,0.7); margin: 0 0 10px;
 }
 
 .header {
@@ -312,7 +354,14 @@ canvas {
     <span class="status-dot" id="globalDot"></span>
     <h1>LPU War Room</h1>
   </div>
-  <div class="refresh-info" id="refreshInfo">Connecting...</div>
+  <div style="display:flex;align-items:center;gap:20px;">
+    <div class="refresh-info" id="refreshInfo">Connecting...</div>
+    <div id="userBadge" style="display:none;align-items:center;gap:10px;color:rgba(255,255,255,0.7);font-size:13px;">
+      <span id="userBadgeName"></span>
+      <span onclick="signOut()" title="Sign out"
+            style="cursor:pointer;color:rgba(255,255,255,0.4);font-size:12px;">Sign out</span>
+    </div>
+  </div>
 </div>
 
 <div class="main">
@@ -388,7 +437,11 @@ canvas {
         <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green);"></span>
         <span style="color: var(--cyan); font-size: 13px; font-weight: 700; letter-spacing: 2.5px;">TOP BOT</span>
       </div>
-      <span onclick="toggleChat()" style="color: var(--t3); font-size: 22px; cursor: pointer; line-height: 1; font-weight: 300;">&times;</span>
+      <div style="display: flex; gap: 14px; align-items: center;">
+        <span onclick="newConversation()" title="New conversation"
+              style="color: var(--t3); font-size: 13px; cursor: pointer; letter-spacing: 1px;">NEW</span>
+        <span onclick="toggleChat()" style="color: var(--t3); font-size: 22px; cursor: pointer; line-height: 1; font-weight: 300;">&times;</span>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -439,87 +492,199 @@ const ANIM_SPEED = 14; // canvas frames per sprite step
 
 const BACKEND = 'https://lpu-agent-backend.up.railway.app';
 
-// ── Auth ──────────────────────────────────────────────────────────────
-let AUTH = null;
-function cleanToken(raw) {
-  // Strip "Bearer " prefix, all whitespace, invisible chars, quotes
-  return raw.replace(/^Bearer\s+/i, '').replace(/[\s\u200B\u00A0\uFEFF"']/g, '').trim();
-}
-function getAuth() {
-  let token = localStorage.getItem('lpu_war_room_token');
-  if (token) {
-    token = cleanToken(token);
-    localStorage.setItem('lpu_war_room_token', token);
-    return `Bearer ${token}`;
+// ── Auth: Supabase email + password ──────────────────────────────────
+const SUPABASE_URL = 'https://uwfzroqgccijhhrfytne.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InV3Znpyb3FnY2NpamhocmZ5dG5lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4OTg0NTQsImV4cCI6MjA5MTQ3NDQ1NH0.FdANLpA7ILDcahCCVCRiYtisaH3p2laBXcB536C92UU';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true },
+});
+
+let AUTH = null;                  // "Bearer <jwt>" or null
+let CURRENT_USER = null;          // { id, email, user_id, tier, display_name }
+
+async function handleRecoveryTokenFromUrl() {
+  // Supabase recovery links arrive with #access_token=...&refresh_token=...&type=recovery
+  const hash = window.location.hash.slice(1);
+  if (!hash || !hash.includes('access_token')) return false;
+  const params = new URLSearchParams(hash);
+  const access_token = params.get('access_token');
+  const refresh_token = params.get('refresh_token');
+  const type = params.get('type');
+  if (!access_token) return false;
+  // Set the session from the URL tokens, then show the set-password form
+  const { error } = await sb.auth.setSession({ access_token, refresh_token });
+  if (error) return false;
+  // Clear hash so reload doesn't re-trigger
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  if (type === 'recovery') {
+    showSetPasswordForm();
+    return true;
   }
-  return null;
+  return false;
 }
-function showAuthGate() {
+
+async function resolveCurrentUser() {
+  const { data, error } = await sb.auth.getSession();
+  if (error || !data.session) return null;
+  const session = data.session;
+  AUTH = `Bearer ${session.access_token}`;
+  const meta = session.user.user_metadata || {};
+  CURRENT_USER = {
+    id: session.user.id,
+    email: session.user.email,
+    user_id: meta.user_id || session.user.email.split('@')[0],
+    tier: meta.tier || 'operations',
+    display_name: meta.display_name || session.user.email,
+  };
+  return CURRENT_USER;
+}
+
+function showLoginForm(errorMsg) {
+  const existing = document.getElementById('authOverlay');
+  if (existing) existing.remove();
   const overlay = document.createElement('div');
   overlay.id = 'authOverlay';
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,11,16,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:Outfit,system-ui,sans-serif;';
   overlay.innerHTML = `
-    <div style="background:var(--surface);border:1px solid var(--border-cyan);border-radius:var(--radius);padding:40px;max-width:440px;width:90%;text-align:center;box-shadow:0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px var(--cyan-15);">
-      <h2 style="color:var(--cyan);font-family:'Outfit',system-ui,sans-serif;font-weight:800;letter-spacing:3px;font-size:22px;margin:0 0 10px;text-transform:uppercase;">LPU War Room</h2>
-      <p style="color:var(--t3);font-size:14px;margin:0 0 24px;">Enter your agent bearer token to connect.</p>
-      <input type="password" id="authTokenInput" placeholder="sk-agent1-..."
-        style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--t1);padding:12px 14px;font-family:'Outfit',system-ui,sans-serif;font-size:14px;border-radius:var(--radius-sm);outline:none;margin-bottom:20px;transition:border-color 0.2s;"
-        onfocus="this.style.borderColor='var(--cyan-40)'"
-        onblur="this.style.borderColor='var(--border)'" />
-      <button id="authSubmitBtn"
-        style="background:var(--cyan);color:var(--bg);border:none;padding:12px 40px;font-family:'Outfit',system-ui,sans-serif;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:var(--radius-sm);cursor:pointer;">
-        Connect
+    <div style="background:#141520;border:1px solid rgba(0,204,255,0.2);border-radius:16px;padding:44px;max-width:460px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,204,255,0.1);">
+      <div style="text-align:center;margin-bottom:32px;">
+        <h1 style="color:#00CCFF;font-weight:800;letter-spacing:4px;font-size:22px;margin:0 0 8px;text-transform:uppercase;">LPU War Room</h1>
+        <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0;">Sign in to your operator account.</p>
+      </div>
+      <label style="display:block;color:rgba(255,255,255,0.8);font-size:13px;font-weight:500;margin-bottom:6px;">Email</label>
+      <input type="email" id="loginEmail" placeholder="you@locumsunited.com" autocomplete="email"
+        style="width:100%;box-sizing:border-box;background:#0a0b10;border:1px solid rgba(255,255,255,0.08);color:#fff;padding:12px 14px;font-family:inherit;font-size:15px;border-radius:10px;outline:none;margin-bottom:16px;transition:border-color 0.15s;"
+        onfocus="this.style.borderColor='rgba(0,204,255,0.4)'"
+        onblur="this.style.borderColor='rgba(255,255,255,0.08)'" />
+      <label style="display:block;color:rgba(255,255,255,0.8);font-size:13px;font-weight:500;margin-bottom:6px;">Password</label>
+      <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password"
+        style="width:100%;box-sizing:border-box;background:#0a0b10;border:1px solid rgba(255,255,255,0.08);color:#fff;padding:12px 14px;font-family:inherit;font-size:15px;border-radius:10px;outline:none;margin-bottom:20px;transition:border-color 0.15s;"
+        onfocus="this.style.borderColor='rgba(0,204,255,0.4)'"
+        onblur="this.style.borderColor='rgba(255,255,255,0.08)'" />
+      <button id="loginBtn"
+        style="width:100%;background:#00CCFF;color:#0a0b10;border:none;padding:13px 32px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:10px;cursor:pointer;transition:filter 0.15s;"
+        onmouseover="this.style.filter='brightness(1.1)'" onmouseout="this.style.filter='brightness(1)'">
+        Sign in
       </button>
+      <div style="text-align:center;margin-top:20px;">
+        <a id="forgotPassword" style="color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;text-decoration:none;">Forgot password?</a>
+      </div>
+      <div id="loginError" style="margin-top:16px;color:#F87171;font-size:13px;text-align:center;min-height:18px;">${errorMsg || ''}</div>
     </div>`;
   document.body.appendChild(overlay);
-  const input = document.getElementById('authTokenInput');
-  const btn = document.getElementById('authSubmitBtn');
+  const emailInput = document.getElementById('loginEmail');
+  const passInput = document.getElementById('loginPassword');
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
   async function submit() {
-    const val = cleanToken(input.value);
-    if (!val) return;
-    btn.textContent = 'Connecting...';
+    const email = emailInput.value.trim();
+    const password = passInput.value;
+    if (!email || !password) return;
     btn.disabled = true;
-
-    // Test the token against an auth-required endpoint
-    try {
-      const res = await fetch(`${BACKEND}/manager/tools/get_recruitment_kpis`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${val}`,
-        },
-        body: JSON.stringify({ windows_hours: [24] }),
-      });
-
-      if (res.ok || res.status !== 401) {
-        // Token accepted. Save and proceed.
-        localStorage.setItem('lpu_war_room_token', val);
-        AUTH = `Bearer ${val}`;
-        overlay.remove();
-        pollData();
-        return;
-      }
-    } catch (e) {
-      // Network error. Save token anyway, user might be offline temporarily.
-      localStorage.setItem('lpu_war_room_token', val);
-      AUTH = `Bearer ${val}`;
-      overlay.remove();
-      pollData();
+    btn.textContent = 'Signing in...';
+    errEl.textContent = '';
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      errEl.textContent = error.message || 'Invalid credentials.';
+      btn.disabled = false;
+      btn.textContent = 'Sign in';
       return;
     }
+    await resolveCurrentUser();
+    overlay.remove();
+    onAuthReady();
+  }
+  btn.addEventListener('click', submit);
+  passInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  emailInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') passInput.focus(); });
+  document.getElementById('forgotPassword').addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    if (!email) { errEl.textContent = 'Enter your email above first.'; return; }
+    errEl.style.color = '#00CCFF';
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname,
+    });
+    if (error) {
+      errEl.style.color = '#F87171';
+      errEl.textContent = error.message || 'Reset failed.';
+    } else {
+      errEl.textContent = 'Password reset email sent. Check your inbox.';
+    }
+  });
+  setTimeout(() => emailInput.focus(), 50);
+}
 
-    // 401: token is wrong
-    btn.textContent = 'Invalid token';
-    btn.style.background = '#ff4444';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent = 'Connect'; btn.style.background = '#00CCFF'; }, 2500);
+function showSetPasswordForm() {
+  const existing = document.getElementById('authOverlay');
+  if (existing) existing.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'authOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(10,11,16,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:Outfit,system-ui,sans-serif;';
+  overlay.innerHTML = `
+    <div style="background:#141520;border:1px solid rgba(0,204,255,0.2);border-radius:16px;padding:44px;max-width:460px;width:90%;box-shadow:0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,204,255,0.1);">
+      <h1 style="color:#00CCFF;font-weight:800;letter-spacing:4px;font-size:22px;margin:0 0 8px;text-transform:uppercase;text-align:center;">Set your password</h1>
+      <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 28px;text-align:center;">Pick a strong password for your operator account.</p>
+      <label style="display:block;color:rgba(255,255,255,0.8);font-size:13px;margin-bottom:6px;">New password</label>
+      <input type="password" id="newPassword" placeholder="at least 8 characters"
+        style="width:100%;box-sizing:border-box;background:#0a0b10;border:1px solid rgba(255,255,255,0.08);color:#fff;padding:12px 14px;font-family:inherit;font-size:15px;border-radius:10px;outline:none;margin-bottom:20px;" />
+      <button id="setPassBtn" style="width:100%;background:#00CCFF;color:#0a0b10;border:none;padding:13px 32px;font-family:inherit;font-size:14px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;border-radius:10px;cursor:pointer;">
+        Save and sign in
+      </button>
+      <div id="setPassError" style="margin-top:16px;color:#F87171;font-size:13px;text-align:center;min-height:18px;"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+  const input = document.getElementById('newPassword');
+  const btn = document.getElementById('setPassBtn');
+  const errEl = document.getElementById('setPassError');
+  async function submit() {
+    const pw = input.value;
+    if (!pw || pw.length < 8) {
+      errEl.textContent = 'At least 8 characters.'; return;
+    }
+    btn.disabled = true; btn.textContent = 'Saving...';
+    const { error } = await sb.auth.updateUser({ password: pw });
+    if (error) {
+      errEl.textContent = error.message; btn.disabled = false; btn.textContent = 'Save and sign in'; return;
+    }
+    await resolveCurrentUser();
+    overlay.remove();
+    onAuthReady();
   }
   btn.addEventListener('click', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  input.focus();
+  setTimeout(() => input.focus(), 50);
 }
-AUTH = getAuth();
-if (!AUTH) showAuthGate();
+
+async function signOut() {
+  await sb.auth.signOut();
+  AUTH = null; CURRENT_USER = null;
+  location.reload();
+}
+
+function onAuthReady() {
+  // Called once we have a valid session. Kick off data polling + chat.
+  if (CURRENT_USER) {
+    const badge = document.getElementById('userBadge');
+    const name = document.getElementById('userBadgeName');
+    if (badge && name) {
+      name.textContent = CURRENT_USER.display_name;
+      badge.style.display = 'flex';
+    }
+  }
+  if (typeof pollData === 'function') pollData();
+}
+
+// Boot: handle recovery link, then check existing session, else show login.
+(async () => {
+  const recoveryHandled = await handleRecoveryTokenFromUrl();
+  if (recoveryHandled) return;  // set-password form is showing
+  const user = await resolveCurrentUser();
+  if (!user) {
+    showLoginForm();
+  } else {
+    // Already signed in. Data polling kicks off after sprites load (see bottom).
+  }
+})();
 
 // ── Agent definitions ─────────────────────────────────────────────────
 // desk.col/row = top-left tile of the desk footprint (DESK_FRONT is 3w x 2h)
@@ -1157,97 +1322,256 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
-function renderChatText(text) {
-  // Escape first, then re-apply lightweight formatting
-  let html = escapeHtml(text);
-  // Bold: **text**
-  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-  // Remove markdown tables (| a | b |) - collapse to line breaks
-  html = html.replace(/^\|.+\|$/gm, (line) => {
-    const cells = line.split('|').map(c => c.trim()).filter(c => c && !c.match(/^-+$/));
-    return cells.join(' \u2022 ');
+// ── Markdown renderer (marked + DOMPurify) ───────────────────────────
+if (window.marked) {
+  marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
+}
+function renderMarkdown(text) {
+  if (!window.marked || !window.DOMPurify) {
+    return escapeHtml(text).replace(/\n/g, '<br>');
+  }
+  const rawHtml = marked.parse(text || '');
+  return DOMPurify.sanitize(rawHtml, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'ul', 'ol', 'li', 'code', 'pre', 'blockquote',
+                   'h1', 'h2', 'h3', 'h4', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'a', 'hr'],
+    ALLOWED_ATTR: ['href', 'target', 'rel'],
   });
-  // Preserve line breaks
-  html = html.replace(/\n/g, '<br>');
-  return html;
 }
 
-function appendChatMessage(sender, text, color) {
-  const div = document.createElement('div');
-  div.style.marginBottom = '14px';
-  div.style.lineHeight = '1.6';
-  const tag = document.createElement('span');
-  tag.style.color = color;
-  tag.style.fontWeight = '700';
-  tag.style.letterSpacing = '0.5px';
-  tag.textContent = sender + ': ';
-  const msg = document.createElement('span');
-  msg.style.color = 'var(--t2)';
-  msg.innerHTML = renderChatText(text);
-  div.appendChild(tag);
-  div.appendChild(msg);
-  chatMessages.appendChild(div);
+// ── Conversation state ───────────────────────────────────────────────
+let CONVERSATION_ID = localStorage.getItem('lpu_conversation_id') || null;
+
+function newConversation() {
+  CONVERSATION_ID = null;
+  localStorage.removeItem('lpu_conversation_id');
+  chatMessages.innerHTML = '<div style="color:rgba(255,255,255,0.4);font-style:italic;">New conversation. What do you need?</div>';
+  chatHistory = [];
+}
+
+// ── Message rendering ────────────────────────────────────────────────
+function appendUserMessage(text) {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-user';
+  wrap.style.cssText = 'margin-bottom:18px;';
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:baseline;">
+      <span style="color:#00CCFF;font-weight:700;letter-spacing:0.5px;font-size:13px;">YOU</span>
+      <div style="color:rgba(255,255,255,0.92);line-height:1.6;flex:1;">${escapeHtml(text)}</div>
+    </div>`;
+  chatMessages.appendChild(wrap);
   chatMessages.scrollTop = chatMessages.scrollHeight;
-  chatHistory.push({ sender, text });
+  chatHistory.push({ role: 'user', text });
 }
 
-async function sendChat() {
-  const message = chatInput.value.trim();
+function startAssistantMessage() {
+  const wrap = document.createElement('div');
+  wrap.className = 'msg msg-assistant';
+  wrap.style.cssText = 'margin-bottom:18px;';
+  wrap.innerHTML = `
+    <div style="display:flex;gap:10px;align-items:flex-start;">
+      <span style="color:#ff6b6b;font-weight:700;letter-spacing:0.5px;font-size:13px;flex-shrink:0;margin-top:2px;">TB</span>
+      <div style="flex:1;min-width:0;">
+        <div class="tool-cards" style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px;"></div>
+        <div class="assistant-text markdown-body" style="color:rgba(255,255,255,0.92);line-height:1.6;"></div>
+        <div class="msg-actions" style="display:none;gap:8px;margin-top:10px;opacity:0.6;font-size:12px;">
+          <span style="cursor:pointer;" class="copy-btn">Copy</span>
+          <span style="cursor:pointer;" class="regen-btn">Regenerate</span>
+          <span style="cursor:pointer;" class="thumb-up">👍</span>
+          <span style="cursor:pointer;" class="thumb-down">👎</span>
+        </div>
+      </div>
+    </div>`;
+  chatMessages.appendChild(wrap);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return {
+    wrap,
+    toolCards: wrap.querySelector('.tool-cards'),
+    textEl: wrap.querySelector('.assistant-text'),
+    actionsEl: wrap.querySelector('.msg-actions'),
+    currentText: '',
+  };
+}
+
+function appendToolCard(container, tool, display, agent) {
+  const card = document.createElement('div');
+  card.className = 'tool-card';
+  card.dataset.tool = tool;
+  const agentBadge = agent && agent !== 'lpu-top-bot'
+    ? `<span style="color:rgba(0,204,255,0.8);font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-right:8px;">${agentLabel(agent)}</span>`
+    : '';
+  card.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;background:rgba(0,204,255,0.06);border:1px solid rgba(0,204,255,0.2);border-radius:8px;font-size:13px;color:rgba(255,255,255,0.8);';
+  card.innerHTML = `
+    <span class="spinner" style="width:12px;height:12px;border:2px solid rgba(0,204,255,0.2);border-top-color:#00CCFF;border-radius:50%;animation:spin 0.8s linear infinite;"></span>
+    ${agentBadge}
+    <span class="tool-display">${escapeHtml(display)}</span>
+    <span class="tool-summary" style="margin-left:auto;color:rgba(255,255,255,0.5);font-size:12px;"></span>`;
+  container.appendChild(card);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return card;
+}
+
+function agentLabel(agentKey) {
+  const map = {
+    'lpu-top-bot': 'Top Bot',
+    'lpu-recruitment-manager': 'Recruitment Manager',
+    'lpu-credentialing-manager': 'Credentialing Manager',
+    'lpu-scheduling-manager': 'Scheduling Manager',
+    'lpu-agent-1-job-sourcing': 'Agent 1',
+    'lpu-agent-2-physician-finder': 'Agent 2',
+  };
+  return map[agentKey] || agentKey;
+}
+
+function finalizeToolCard(card, summary, isError) {
+  if (!card) return;
+  const spinner = card.querySelector('.spinner');
+  if (spinner) {
+    spinner.outerHTML = `<span style="color:${isError ? '#F87171' : '#34D399'};font-size:14px;">${isError ? '✕' : '✓'}</span>`;
+  }
+  const sumEl = card.querySelector('.tool-summary');
+  if (sumEl) sumEl.textContent = summary || '';
+}
+
+// ── SSE chat send ────────────────────────────────────────────────────
+let chatHistory = [];
+let lastUserMessage = '';
+
+async function sendChat(messageOverride) {
+  const message = (messageOverride !== undefined ? messageOverride : chatInput.value).trim();
   if (!message || !AUTH) return;
   chatInput.value = '';
+  lastUserMessage = message;
 
-  // Clear placeholder on first message
-  if (chatHistory.length === 0) {
-    chatMessages.innerHTML = '';
-  }
+  if (chatHistory.length === 0) chatMessages.innerHTML = '';
 
-  appendChatMessage('You', message, '#00CCFF');
-
-  // Show typing indicator
-  const typing = document.createElement('div');
-  typing.style.color = '#555';
-  typing.style.fontStyle = 'italic';
-  typing.textContent = 'Top Bot is thinking...';
-  chatMessages.appendChild(typing);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-
+  appendUserMessage(message);
+  const assistant = startAssistantMessage();
   addActivity('TB', 'Chat session started');
 
+  // Map tool_use_ids to card elements so we can update them on tool.result
+  const cardsByToolUseId = new Map();
+  let seenToolUseIdForTool = new Map(); // most recent card per tool name (fallback)
+
   try {
-    const res = await fetch(`${BACKEND}/topbot/tools/chat`, {
+    const res = await fetch(`${BACKEND}/topbot/chat/stream`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': AUTH,
       },
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({
+        message,
+        conversation_id: CONVERSATION_ID,
+      }),
     });
 
-    chatMessages.removeChild(typing);
-
-    if (!res.ok) {
-      appendChatMessage('System', `Error: HTTP ${res.status}`, '#ff4444');
+    if (!res.ok || !res.body) {
+      assistant.textEl.innerHTML = '<em style="color:rgba(255,255,255,0.5);">Having trouble reaching the session. Try again in a moment.</em>';
       return;
     }
 
-    const data = await res.json();
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
 
-    if (data.status === 'ok' && data.response) {
-      appendChatMessage('Top Bot', data.response, '#ff6b6b');
-      if (data.tool_calls > 0) {
-        addActivity('TB', `Chat: ${data.tool_calls} tool calls, session ${data.session_id}`);
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE frames are separated by \n\n
+      const frames = buffer.split('\n\n');
+      buffer = frames.pop() || '';
+      for (const frame of frames) {
+        if (!frame.trim()) continue;
+        const lines = frame.split('\n');
+        let eventType = 'message';
+        let dataStr = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) eventType = line.slice(7).trim();
+          else if (line.startsWith('data: ')) dataStr += line.slice(6);
+        }
+        let data = {};
+        try { data = JSON.parse(dataStr); } catch (_) {}
+
+        if (eventType === 'session_started') {
+          if (data.conversation_id) {
+            CONVERSATION_ID = data.conversation_id;
+            localStorage.setItem('lpu_conversation_id', CONVERSATION_ID);
+          }
+        } else if (eventType === 'tool_start') {
+          const card = appendToolCard(assistant.toolCards, data.tool, data.display || data.tool, data.agent);
+          if (data.input && typeof data.input === 'object') {
+            card.dataset.input = JSON.stringify(data.input);
+          }
+          if (data.tool_use_id) cardsByToolUseId.set(data.tool_use_id, card);
+          seenToolUseIdForTool.set(data.tool, card);
+        } else if (eventType === 'tool_result') {
+          // Find card by tool_use_id if present, else fall back to last seen for tool name
+          let card = data.tool_use_id && cardsByToolUseId.get(data.tool_use_id);
+          if (!card) card = seenToolUseIdForTool.get(data.tool);
+          finalizeToolCard(card, data.output_summary, data.is_error);
+        } else if (eventType === 'text_delta') {
+          assistant.currentText += data.text || '';
+          assistant.textEl.innerHTML = renderMarkdown(assistant.currentText);
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (eventType === 'agent_message') {
+          // Full agent message block; replace current streamed text
+          if (data.text) {
+            assistant.currentText = data.text;
+            assistant.textEl.innerHTML = renderMarkdown(assistant.currentText);
+          }
+        } else if (eventType === 'done') {
+          if (data.final_text && !assistant.currentText.trim()) {
+            assistant.currentText = data.final_text;
+            assistant.textEl.innerHTML = renderMarkdown(data.final_text);
+          }
+          // Attach message actions
+          if (data.assistant_message_id) {
+            assistant.wrap.dataset.messageId = data.assistant_message_id;
+          }
+          assistant.actionsEl.style.display = 'flex';
+          wireMessageActions(assistant);
+          addActivity('TB', `Chat: ${data.tool_call_count || 0} tool calls`);
+          refreshAgentStatuses();
+        } else if (eventType === 'error') {
+          assistant.textEl.innerHTML = `<em style="color:rgba(255,255,255,0.5);">${escapeHtml(data.message || 'Working on getting that for you. Ask again in a moment.')}</em>`;
+        }
       }
-      // Refresh agent statuses since a session just ran
-      refreshAgentStatuses();
-    } else if (data.status === 'error') {
-      appendChatMessage('Top Bot', data.response || 'Session failed', '#ff4444');
-    } else {
-      appendChatMessage('Top Bot', data.response || 'No response', '#888');
     }
   } catch (err) {
-    if (typing.parentNode) chatMessages.removeChild(typing);
-    appendChatMessage('System', `Network error: ${err.message}`, '#ff4444');
+    assistant.textEl.innerHTML = `<em style="color:rgba(255,255,255,0.5);">Connection interrupted. Try again.</em>`;
   }
+}
+
+function wireMessageActions(assistant) {
+  const copyBtn = assistant.actionsEl.querySelector('.copy-btn');
+  const regenBtn = assistant.actionsEl.querySelector('.regen-btn');
+  const thumbUp = assistant.actionsEl.querySelector('.thumb-up');
+  const thumbDown = assistant.actionsEl.querySelector('.thumb-down');
+  copyBtn.addEventListener('click', () => {
+    navigator.clipboard.writeText(assistant.currentText);
+    copyBtn.textContent = 'Copied';
+    setTimeout(() => copyBtn.textContent = 'Copy', 1500);
+  });
+  regenBtn.addEventListener('click', () => {
+    if (lastUserMessage) sendChat(lastUserMessage);
+  });
+  thumbUp.addEventListener('click', () => rateMessage(assistant, 1, thumbUp));
+  thumbDown.addEventListener('click', () => rateMessage(assistant, -1, thumbDown));
+}
+
+async function rateMessage(assistant, rating, btn) {
+  const mid = assistant.wrap.dataset.messageId;
+  if (!mid) return;
+  try {
+    await fetch(`${BACKEND}/topbot/chat/rate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': AUTH },
+      body: JSON.stringify({ message_id: mid, rating }),
+    });
+    btn.style.opacity = '1';
+    btn.style.color = rating > 0 ? '#34D399' : '#F87171';
+  } catch (_) {}
 }
 
 // ── Floating chat: toggle + drag ─────────────────────────────────────
@@ -1316,13 +1640,26 @@ function toggleChat() {
   }
 })();
 
-// Boot: load all sprites first, then start render loop and data polling
+// Boot: load sprites. Data polling kicks in only once auth is ready.
+let _pollIntervalHandle = null;
+function startPolling() {
+  if (_pollIntervalHandle) return;
+  pollData();
+  _pollIntervalHandle = setInterval(pollData, 60000);
+}
+// Override onAuthReady (defined in the auth block) to wire polling
+const _origOnAuthReady = onAuthReady;
+onAuthReady = function() {
+  if (typeof _origOnAuthReady === 'function') _origOnAuthReady();
+  startPolling();
+};
+
 loadAllSprites().then(() => {
   render();
   renderAgentList();
-  pollData();
-  setInterval(pollData, 60000);
   setInterval(updateRefreshInfo, 5000);
+  // If auth was already resolved before sprites loaded, kick off polling
+  if (AUTH) startPolling();
 });
 </script>
 
