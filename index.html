@@ -1148,17 +1148,42 @@ const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 let chatHistory = [];
 
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderChatText(text) {
+  // Escape first, then re-apply lightweight formatting
+  let html = escapeHtml(text);
+  // Bold: **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  // Remove markdown tables (| a | b |) - collapse to line breaks
+  html = html.replace(/^\|.+\|$/gm, (line) => {
+    const cells = line.split('|').map(c => c.trim()).filter(c => c && !c.match(/^-+$/));
+    return cells.join(' \u2022 ');
+  });
+  // Preserve line breaks
+  html = html.replace(/\n/g, '<br>');
+  return html;
+}
+
 function appendChatMessage(sender, text, color) {
   const div = document.createElement('div');
-  div.style.marginBottom = '6px';
-  div.style.lineHeight = '1.4';
+  div.style.marginBottom = '14px';
+  div.style.lineHeight = '1.6';
   const tag = document.createElement('span');
   tag.style.color = color;
-  tag.style.fontWeight = 'bold';
+  tag.style.fontWeight = '700';
+  tag.style.letterSpacing = '0.5px';
   tag.textContent = sender + ': ';
   const msg = document.createElement('span');
-  msg.style.color = '#ccc';
-  msg.textContent = text;
+  msg.style.color = 'var(--t2)';
+  msg.innerHTML = renderChatText(text);
   div.appendChild(tag);
   div.appendChild(msg);
   chatMessages.appendChild(div);
